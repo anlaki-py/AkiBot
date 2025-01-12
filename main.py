@@ -34,7 +34,7 @@ from utils.ytb.ytb2mp3 import YouTubeDownloader
 
 from datetime import datetime
 
-from utils.config_editor import config_editor
+from utils.flask.config_editor import config_editor
 
 # class Config:
 
