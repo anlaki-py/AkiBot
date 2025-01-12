@@ -20,4 +20,4 @@ dist/
 Thumbs.db
 
 .env
-.sh
+*.sh
