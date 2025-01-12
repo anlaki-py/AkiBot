@@ -179,13 +179,13 @@ The web interface allows you to:
 
 All changes are applied in real-time without requiring a bot restart!
 
-## 📜 License
+## License
 
 AkiBot is released under a custom non-commercial license:
 
-- ✅ Free for personal and non-commercial use
-- ✅ Modifications and distributions allowed (with attribution)
-- ❌ Commercial use requires explicit permission
-- ✅ Full source code access
+- Free for personal and non-commercial use
+- Modifications and distributions allowed (with attribution)
+- Commercial use requires explicit permission
+- Full source code access
 
 For commercial licensing inquiries or full license details, please see the [LICENSE](LICENSE) file or contact the developer.
