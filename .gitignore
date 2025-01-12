@@ -21,4 +21,4 @@ Thumbs.db
 
 .env
 *.sh
-*.json
+config.json
