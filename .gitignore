@@ -1,5 +1,7 @@
 venv/
 */venv/
+history/
+data/
 
 node_modules/
 

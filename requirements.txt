@@ -1,0 +1,11 @@
+python-telegram-bot
+requests
+Pillow
+pytz
+rich
+yt-dlp
+instaloader
+mutagen
+telegram
+flask
+pytelegrambotapi
