@@ -29,6 +29,9 @@
 }
 ```
 
+- allowed_users
+    Add the ID of users that will have access to use the bot
+
 ---
 
 ## Environmental variables
