@@ -1,8 +1,7 @@
 {
     "allowed_users": [
-        "1399570616",
-        "1720242898",
-        "6395584326"
+        "0123456789",
+        "0987654321"
     ],
     "gemini_model": "gemini-2.0-flash-exp",
     "generation_config": {
@@ -18,5 +17,5 @@
         "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
     },
-    "system_prompt_file": "system/Reze_text.txt"
+    "system_prompt_file": "system/default.txt"
 }
