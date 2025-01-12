@@ -564,7 +564,7 @@ def update_system_prompt():
         return jsonify({'success': False, 'message': f'Error updating system prompt: {str(e)}'})
 
 def run():
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='127.0.0.1', port=8080)
 
 def config_editor():
     t = Thread(target=run)

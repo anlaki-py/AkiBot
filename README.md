@@ -40,7 +40,7 @@ export GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 . run.sh
 ```
 
-> Flask web app will start at http://localhost:8080 and it's a config editor for the bot
+> Flask web app will start at http://127.0.0.1:8080 and it's a config editor for `config/config.json`
 
 ---
 
