@@ -104,8 +104,8 @@ Experience the future of AI interaction with AkiBot - where speed meets intellig
 1. **Clone and Setup Environment**
    ```bash
    # Clone the repository
-   git clone https://github.com/anlaki-py/public-aki-tg-bot
-   cd public-aki-tg-bot
+   git clone https://github.com/anlaki-py/AkiBot
+   cd AkiBot
 
    # Create and activate virtual environment
    python3 -m venv venv
