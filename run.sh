@@ -50,7 +50,7 @@ fi
 
 # Run the main.py application
 echo "Running main.py..."
-python3 main.py
+python main.py
 
 # If the script reaches this point, notify the user
 echo "Script completed. Exiting."

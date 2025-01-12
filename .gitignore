@@ -25,3 +25,5 @@ config/config.json
 
 pull.sh
 commit.sh
+
+test/
