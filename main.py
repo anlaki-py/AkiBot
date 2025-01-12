@@ -9,7 +9,6 @@ import pickle
 import base64
 import requests
 import re
-
 import telegram
 from telegram import Update, Message
 from telegram.ext import (
@@ -22,43 +21,13 @@ from telegram.ext import (
 from telegram.error import TimedOut, NetworkError, RetryAfter
 from PIL import Image
 import io
-
-# from instaloader import Instaloader, Post, exceptions  # Moved to utils/instagram.py
 import urllib.parse
 import shutil
 from pathlib import Path
-
-# Import the Instagram downloader module
 from utils.instagram.instagram_downloader import InstagramDownloader
 from utils.ytb.ytb2mp3 import YouTubeDownloader
-
 from datetime import datetime
-
 from utils.flask.config_editor import config_editor
-
-# class Config:
-
-    # def __init__(self, config_path: str = "config/config.json"):
-        # with open(config_path, "r") as f:
-            # config = json.load(f)
-
-        # self.telegram_token = os.getenv("TELEGRAM_TOKEN_KEY")
-        # self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        # self.allowed_users = config["allowed_users"]
-        # self.model_name = config["gemini_model"]
-        # self.generation_config = config["generation_config"]
-        # self.safety_settings = config["safety_settings"]
-
-        # with open(config["system_prompt_file"], "r") as f:
-            # self.system_instructions = f.read()
-
-
-
-
-
-
-
-
 
 
 class Config:
@@ -105,16 +74,6 @@ class Config:
     def system_instructions(self) -> str:
         return self._get_config_value("system_instructions")
         
-
-
-
-
-
-
-
-
-
-
 class Chat:
 
     def __init__(self, history=None):
@@ -137,13 +96,11 @@ class Chat:
     async def get_response(self):
         return Response(self.history[-1])  # Latest message
 
-
 class Response:
 
     def __init__(self, text):
         self.text = text["parts"][0]["text"] if isinstance(
             text["parts"][0], dict) else text["parts"][0]
-
 
 class AIBot:
     MAX_RETRIES = 4
@@ -230,7 +187,7 @@ class AIBot:
                 await self.retry_operation(
                     update.message.reply_text,
                     f"Access Denied: You do not have permission to use this bot.\n"
-                    f"Please contact the [developer](https://t.me/anlaky) of this bot to request access.\n"
+                    f"Please contact the [developer](https://t.me/<USERNAME>) of this bot to request access.\n"
                     f"Your ID: `{user_id}`",
                     parse_mode='Markdown')
                 return
@@ -395,15 +352,15 @@ class AIBot:
 
 # ==============================================================================================================
 
-# @check_user_access
-# async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-# """Start command handler."""
-# username = str(update.effective_user.username)
-# await self.retry_operation(
-# update.message.reply_text,
-# f"Welcome {username}! I'm your AkiAI. Send me text, images, documents or audio and I will respond. Use /help for more info.",
-# parse_mode='Markdown'
-# )
+    # @check_user_access
+    # async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # """Start command handler."""
+    # username = str(update.effective_user.username)
+    # await self.retry_operation(
+    # update.message.reply_text,
+    # f"Welcome {username}! I'm your AkiAI. Send me text, images, documents or audio and I will respond. Use /help for more info.",
+    # parse_mode='Markdown'
+    # )
 
 #   @check_user_access
     async def start(self, update: Update,
@@ -660,7 +617,7 @@ Simply send an Instagram post or reel link and the bot will automatically downlo
                     filters.PHOTO | filters.Document.ALL | filters.AUDIO
                     | filters.VOICE, self.handle_media))
 
-            print("Bot is starting...")
+            print(f"\nBot is running...\n")
             application.run_polling(drop_pending_updates=True,
                                     allowed_updates=Update.ALL_TYPES)
 
@@ -672,3 +629,5 @@ if __name__ == "__main__":
     config_editor()
     bot = AIBot()
     bot.run()
+
+# yeah ik, such a goofy code...
