@@ -6,6 +6,44 @@
 
 ---
 
+## Run the bot
+
+**Create virtual environment**
+
+```bash
+python3 -m venv venv
+
+```
+
+**Enter virtual environment**
+
+```bash
+. venv/bin/activate
+```
+
+**Install requirements**
+
+```bash
+pip install -r requirements.txt
+```
+
+**Set environmental variables**
+
+```bash
+export TELEGRAM_TOKEN_KEY="<YOUR_TELEGRAM_TOKEN_KEY>"
+export GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
+```
+
+**Run the bot**
+
+```bash
+. run.sh
+```
+
+> Flask web app will start at http://localhost:8080 and it's a config editor for the bot
+
+---
+
 ## config/config.json
 
 ```json
@@ -36,13 +74,6 @@
     - Add the ID of users that will have access to use the bot
 
 ---
-
-## Environmental variables
-
-```
-export TELEGRAM_TOKEN_KEY="<YOUR_TELEGRAM_TOKEN_KEY>"
-export GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
-```
 
 ## License
 
