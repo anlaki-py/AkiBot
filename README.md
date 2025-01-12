@@ -105,11 +105,11 @@ Experience the future of AI interaction with AkiBot - where speed meets intellig
    ```bash
    # Clone the repository
    git clone https://github.com/anlaki-py/public-aki-tg-bot
-   cd akibot
+   cd public-aki-tg-bot
 
    # Create and activate virtual environment
    python3 -m venv venv
-   source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+   source venv/bin/activate
    
    # Install dependencies
    pip install -r requirements.txt
