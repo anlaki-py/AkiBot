@@ -40,7 +40,7 @@ export GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 . run.sh
 ```
 
-> Flask web app will start at http://127.0.0.1:8080 and it's a config editor for `config/config.json`
+> The file `config/config.json` will be credited and a Flask web app will start at http://127.0.0.1:8080 that is a config editor with user-friendly UI for `config/config.json`
 
 **config/config.json**
 
