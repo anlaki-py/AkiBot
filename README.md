@@ -29,7 +29,7 @@
 }
 ```
 
-- allowed_users
+- `allowed_users`
     - Add the ID of users that will have access to use the bot
 
 ---
@@ -40,3 +40,13 @@
 export TELEGRAM_TOKEN_KEY="<YOUR_TELEGRAM_TOKEN_KEY>"
 export GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 ```
+
+## License
+
+This project is licensed under a custom non-commercial license.
+
+- You are free to use, modify, and distribute this project for non-commercial purposes.
+- For commercial use, please contact me to discuss licensing terms.
+- Proper attribution is required if you modify and share this work.
+
+For the full license text, see the [LICENSE](LICENSE) file.
