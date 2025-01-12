@@ -20,5 +20,8 @@ dist/
 Thumbs.db
 
 .env
-*.sh
+
 config/config.json
+
+pull.sh
+commit.sh
