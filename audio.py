@@ -609,7 +609,7 @@ Simply send an Instagram post or reel link and the bot will automatically downlo
                 
                 # First, convert the text response to speech
                 voice_id = 'piTKgcLEGmPE4e6mEKli'  # female voice
-                t2s_api_key = 'sk_7167186ad3376b0fff9b2274c6d3b669872a8befdbc939a4'
+                t2s_api_key = os.getenv("ELEVENLABS_API_KEY")
                 audio_content = await self._convert_text_to_speech(result, voice_id, t2s_api_key)
                 
                 if audio_content:
