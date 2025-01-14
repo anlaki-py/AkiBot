@@ -1,4 +1,4 @@
-# AkiBot v1.0
+# AkiBot v1.0.0
 import os
 import json
 import tempfile

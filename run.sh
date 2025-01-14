@@ -50,7 +50,7 @@ fi
 
 # Run the main.py application
 echo -e "\n.__________________________.\n"
-echo -e "AkiBot v1.0"
+echo -e "AkiBot v1.0.0"
 echo -e "Running main.py...\n"
 python main.py
 

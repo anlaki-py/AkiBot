@@ -1,4 +1,4 @@
-# config_editor.py v1.0
+# config_editor.py v1.0.0
 from flask import Flask, render_template_string, request, jsonify
 import json
 import os

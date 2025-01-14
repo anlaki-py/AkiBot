@@ -1,4 +1,4 @@
-# ytb2mp3.py v1.0
+# ytb2mp3.py v1.0.0
 import yt_dlp
 import os
 from mutagen.easyid3 import EasyID3
