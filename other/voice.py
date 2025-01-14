@@ -1,3 +1,4 @@
+# ai reply in audio format when user sends a voice message.
 import os
 import json
 import tempfile
@@ -695,5 +696,3 @@ if __name__ == "__main__":
     config_editor()
     bot = AIBot()
     bot.run()
-
-# yeah ik, such a goofy code...

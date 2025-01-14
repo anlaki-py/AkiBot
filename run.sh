@@ -1,5 +1,5 @@
 #!/bin/bash
-
+clear
 # Define the directory and file path
 CONFIG_DIR="config"
 CONFIG_FILE="$CONFIG_DIR/config.json"
@@ -49,7 +49,9 @@ else
 fi
 
 # Run the main.py application
-echo "Running main.py..."
+echo -e "\n.__________________________.\n"
+echo -e "AkiBot v1.0"
+echo -e "Running main.py...\n"
 python main.py
 
 # If the script reaches this point, notify the user

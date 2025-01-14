@@ -1,9 +1,18 @@
+# config_editor.py v1.0
 from flask import Flask, render_template_string, request, jsonify
 import json
 import os
 from threading import Thread
+import logging
 
-app = Flask('')
+PORT = 8080
+HOST = '127.0.0.1'
+
+app = Flask('AkiBot Config Editor v1.0')
+
+# Suppress Flask's "development server" warning
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 # Load the HTML content from an external file
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -109,9 +118,10 @@ def update_system_prompt():
         return jsonify({'success': False, 'message': f'Error updating system prompt: {str(e)}'})
 
 def run():
-    app.run(host='127.0.0.1', port=8080)
+    app.run(debug=False, host=HOST, port=PORT)
 
 def config_editor():
     t = Thread(target=run)
     t.start()
+    print(f" * Serving at http://{HOST}:{PORT}") 
     

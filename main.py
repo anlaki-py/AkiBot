@@ -1,3 +1,4 @@
+# AkiBot v1.0
 import os
 import json
 import tempfile
@@ -28,7 +29,6 @@ from utils.instagram.instagram_downloader import InstagramDownloader
 from utils.ytb.ytb2mp3 import YouTubeDownloader
 from datetime import datetime
 from utils.flask.config_editor import config_editor
-
 
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
@@ -439,11 +439,6 @@ class AIBot:
 - /start » Start the bot and get a greeting message.
 - /help » Show this help message.
 - /clear » Clear the conversation history.
-- /insta (instagram_link) » Download Instagram media (photos and videos) as compressed files.
-- /instaFile (instagram_link) » Download Instagram media as uncompressed files.
-
-<b>Automatic Instagram Link Detection:</b>
-Simply send an Instagram post or reel link and the bot will automatically download the media.
 
 <b>Capabilities:</b>
 
@@ -452,7 +447,7 @@ Simply send an Instagram post or reel link and the bot will automatically downlo
 - Send text-based documents for document understanding.
 - Send audio files for audio processing.
 - The bot maintains chat history context.
-- Safety settings are configured to <b>BLOCK_NONE</b> for all categories.
+
 """
         await self.retry_operation(update.message.reply_text,
                                    help_text,
@@ -618,6 +613,7 @@ Simply send an Instagram post or reel link and the bot will automatically downlo
                     | filters.VOICE, self.handle_media))
 
             print(f"\nBot is running...\n")
+            
             application.run_polling(drop_pending_updates=True,
                                     allowed_updates=Update.ALL_TYPES)
 
@@ -629,5 +625,3 @@ if __name__ == "__main__":
     config_editor()
     bot = AIBot()
     bot.run()
-
-# yeah ik, such a goofy code...
