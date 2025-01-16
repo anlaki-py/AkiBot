@@ -9,3 +9,4 @@ mutagen
 telegram
 flask
 pytelegrambotapi
+aiohttp
