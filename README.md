@@ -43,10 +43,12 @@ The bot is capable of:
     ```bash
     pip install -r requirements.txt
     ```
-2.  **Environment Variables:**
+2.  **Install ffmpeg:**
+    - Ensure you have `ffmpeg` installed on your system. This is required for YouTube to MP3 conversion.
+3.  **Environment Variables:**
     -   Set the `TELEGRAM_TOKEN_KEY` environment variable with your Telegram bot token.
     -   Set the `GEMINI_API_KEY` environment variable with your Gemini API key.
-3. **First Time Run:**
+4. **First Time Run:**
     -   Execute the `run.sh` script:
         ```bash
         ./run.sh
@@ -54,7 +56,7 @@ The bot is capable of:
         This will start the bot and the configuration editor, allowing you to set up the bot's configuration.
         The config editor will be available at `http://127.0.0.1:8080`.
         After configuring the bot, you can close the editor.
-4.  **Run the Bot:**
+5.  **Run the Bot:**
     -   After the first time run, you can start the bot directly by running:
         ```bash
         python main.py
