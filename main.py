@@ -1,4 +1,4 @@
-# AkiBot v1.0.0
+# main.py v1.0.1
 import os
 import json
 import tempfile
@@ -29,6 +29,7 @@ from utils.instagram.instagram_downloader import InstagramDownloader
 from utils.ytb.ytb2mp3 import YouTubeDownloader
 from datetime import datetime
 from utils.flask.config_editor import config_editor
+from utils.tools.web2md import Web2MarkdownConverter, RequestError
 
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
@@ -120,6 +121,7 @@ class AIBot:
         self.YOUTUBE_URL_REGEX = re.compile(
             r'(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)'
         )
+        self.web2md_converter = Web2MarkdownConverter()
 
         # No need to configure genai library anymore
         self.api_url = f"{self.GEMINI_API_URL}/{self.config.model_name}"
@@ -350,6 +352,43 @@ class AIBot:
         await self.youtube_downloader.handle_youtube_command(
             self, update, context)
 
+# = Web to Markdown =============================================================================================================
+
+    @check_user_access
+    async def web2md_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler for /web2md command to convert webpage to markdown."""
+        if not context.args:
+            await update.message.reply_text(
+                "Please provide a URL. Usage: /web2md <url>"
+            )
+            return
+            
+        url = context.args[0]
+        status_message = await update.message.reply_text(
+            "Converting webpage to markdown..."
+        )
+        
+        try:
+            markdown_chunks = await self.web2md_converter.convert_url_to_markdown(url)
+            
+            # Delete status message
+            await status_message.delete()
+            
+            # Send chunks
+            for i, chunk in enumerate(markdown_chunks, 1):
+                chunk_header = f"Part {i}/{len(markdown_chunks)}:\n\n" if len(markdown_chunks) > 1 else ""
+                await update.message.reply_text(
+                    chunk_header + chunk,
+                    parse_mode='Markdown'
+                )
+                
+        except ValueError as e:
+            await status_message.edit_text(f"Error: {str(e)}")
+        except RequestError as e:
+            await status_message.edit_text(f"Error: {str(e)}")
+        except Exception as e:
+            await status_message.edit_text(f"An unexpected error occurred: {str(e)}")
+            
 # ==============================================================================================================
 
     # @check_user_access
@@ -611,6 +650,8 @@ class AIBot:
                 MessageHandler(
                     filters.PHOTO | filters.Document.ALL | filters.AUDIO
                     | filters.VOICE, self.handle_media))
+            application.add_handler(CommandHandler("web2md", self.web2md_command))
+            
 
             print(f"\nBot is running...\n")
             
