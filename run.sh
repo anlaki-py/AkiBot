@@ -47,6 +47,7 @@ readonly CONFIG_FILE="$CONFIG_DIR/config.json"
 readonly LOG_DIR="logs"
 readonly LOG_FILE="$LOG_DIR/setup.log"
 readonly REQUIRED_PYTHON_VERSION="3.11"
+readonly MAIN_PYTHON_FILE="main.py"
 
 # ANSI color codes
 readonly RED='\033[0;31m'
@@ -157,16 +158,16 @@ EOL
 run_main_application() {
     log "Starting AkiBot application..."
     
-    if [ ! -f "main.py" ]; then
-        error "main.py not found in the current directory"
+    if [ ! -f "${MAIN_PYTHON_FILE}" ]; then
+        error "${MAIN_PYTHON_FILE} not found in the current directory"
     fi
     
     clear
     print_akibot_logo
     echo -e "AkiBot v${VERSION}"
-    echo -e "Running main.py...\n"
+    echo -e "Running ${MAIN_PYTHON_FILE}...\n"
     
-    if python main.py; then
+    if python ${MAIN_PYTHON_FILE}; then
         success "Application completed successfully"
     else
         error "Application exited with an error"
@@ -202,15 +203,15 @@ main() {
     setup_directories
     create_config
     
-    # Prompt for main.py execution
-    read -p "Run main.py? [Y/n]: " run_main
+    # Prompt for ${MAIN_PYTHON_FILE} execution
+    read -p "Run ${MAIN_PYTHON_FILE}? [Y/n]: " run_main
     
     case ${run_main,,} in
         "y"|"yes"|"")
             run_main_application
             ;;
         "n"|"no")
-            log "User chose not to run main.py"
+            log "User chose not to run ${MAIN_PYTHON_FILE}"
             echo "Exiting script."
             ;;
         *)
@@ -296,16 +297,16 @@ main "$@"
     # echo "Configuration file already exists at $CONFIG_FILE"
 # fi
 
-# # Ask if the user wants to run main.py
-# read -p "Run main.py? [Y/n]: " run_main
+# # Ask if the user wants to run ${MAIN_PYTHON_FILE}
+# read -p "Run ${MAIN_PYTHON_FILE}? [Y/n]: " run_main
 
 # if [[ "$run_main" == "y" || "$run_main" == "yes" || -z "$run_main" ]]; then
-    # # Run the main.py application
+    # # Run the ${MAIN_PYTHON_FILE} application
     # clear
     # print_akibot_logo
     # echo -e "AkiBot v1.0.2"
-    # echo -e "Running main.py...\n"
-    # python main.py
+    # echo -e "Running ${MAIN_PYTHON_FILE}...\n"
+    # python ${MAIN_PYTHON_FILE}
     # clear
 
     # # If the script reaches this point, notify the user
