@@ -127,7 +127,7 @@ create_config() {
     cat > "$CONFIG_FILE" <<EOL
 {
     "allowed_users": [
-        "YOUR ACCOUNT ID HERE"
+        "YOUR_ACCOUNT_ID"
     ],
     "gemini_model": "gemini-2.0-flash-exp",
     "generation_config": {
@@ -137,24 +137,12 @@ create_config() {
         "max_output_tokens": 1024,
         "response_mime_type": "text/plain"
     },
-    "safety_settings": [
-        {
-            "category": "HARM_CATEGORY_HATE_SPEECH",
-            "threshold": "BLOCK_NONE"
-        },
-        {
-            "category": "HARM_CATEGORY_HARASSMENT",
-            "threshold": "BLOCK_NONE"
-        },
-        {
-            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            "threshold": "BLOCK_NONE"
-        },
-        {
-            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-            "threshold": "BLOCK_NONE"
-        }
-    ],
+    "safety_settings": {
+        "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+        "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+        "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
+        "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
+    },
     "system_prompt_file": "system/default.txt"
 }
 EOL
