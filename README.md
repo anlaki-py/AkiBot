@@ -1,4 +1,4 @@
-# AkiBot (v1.0.2) - The Ultimate Telegram AI Assistant
+# AkiBot (v1.1.0 alpha) - The Ultimate Telegram AI Assistant
 
 This is a Telegram bot powered by the Gemini AI model, designed to interact with users through various media types and provide helpful responses.
 
