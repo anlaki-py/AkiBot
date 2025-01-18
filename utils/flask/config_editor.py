@@ -1,14 +1,14 @@
-# config_editor.py v1.0.0
+# config_editor.py v1.0.1
 from flask import Flask, render_template_string, request, jsonify
 import json
 import os
 from threading import Thread
 import logging
 
-PORT = 8080
+PORT = 8282
 HOST = '127.0.0.1'
 
-app = Flask('AkiBot Config Editor v1.0')
+app = Flask('AkiBot Config Editor v1.0.1')
 
 # Suppress Flask's "development server" warning
 log = logging.getLogger('werkzeug')

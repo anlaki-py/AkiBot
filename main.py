@@ -1,4 +1,4 @@
-# main.py v1.4.0
+# main.py v1.4.9
 import os
 import json
 import tempfile
@@ -104,7 +104,7 @@ class Response:
             text["parts"][0], dict) else text["parts"][0]
 
 class AIBot:
-    MAX_RETRIES = 4
+    MAX_RETRIES = 3
     RETRY_DELAY = 3  # seconds
     HISTORY_DIR = "history"
     GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -524,7 +524,10 @@ class AIBot:
 
 # ==============================================================================================================
 
-    # still can't reply to audio 
+
+
+        
+    
     async def get_replied_message_content(self, message: Message) -> Optional[dict]:
         """
         Extract content and metadata from the replied-to message.
@@ -544,79 +547,66 @@ class AIBot:
         }
         
         try:
+            if replied_msg.voice or replied_msg.audio:
+                raise ValueError("Cannot reply to voice or audio messages")
+                
             if replied_msg.text:
                 result['content'] = replied_msg.text
                 result['type'] = 'text'
-            elif replied_msg.caption:
-                result['content'] = replied_msg.caption
-                result['type'] = 'caption'
             elif replied_msg.photo:
                 file_obj = await self.retry_operation(replied_msg.photo[-1].get_file)
                 with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
                     await file_obj.download_to_drive(temp_file.name)
-                    with Image.open(temp_file.name) as img:
-                        buf = io.BytesIO()
-                        img.save(buf, format='JPEG')
-                        img_b64 = base64.b64encode(buf.getvalue()).decode()
-                        result['content'] = [{
-                            "text": "[Image]"
-                        }, {
-                            "inline_data": {
-                                "mime_type": "image/jpeg",
-                                "data": img_b64
-                            }
-                        }]
-                        result['type'] = 'image'
+                    try:
+                        with Image.open(temp_file.name) as img:
+                            buf = io.BytesIO()
+                            img.save(buf, format='JPEG')
+                            img_b64 = base64.b64encode(buf.getvalue()).decode()
+                            result['content'] = [{
+                                "text": "[Image]",
+                                "image_data": img_b64,
+                                "caption": replied_msg.caption or ""
+                            }]
+                            result['type'] = 'image'
+                    finally:
+                        os.unlink(temp_file.name)
             elif replied_msg.document and replied_msg.document.file_name.endswith(tuple(self.allowed_extensions)):
                 file_obj = await self.retry_operation(replied_msg.document.get_file)
                 with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                     await file_obj.download_to_drive(temp_file.name)
-                    with open(temp_file.name, 'r', encoding='utf-8') as f:
-                        result['content'] = f.read()
-                        result['type'] = 'document'
-            elif replied_msg.voice or replied_msg.audio:
-                # Handle audio replies with proper audio data
-                audio_msg = replied_msg.voice or replied_msg.audio
-                file_obj = await self.retry_operation(audio_msg.get_file)
-                
-                with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
-                    await file_obj.download_to_drive(temp_file.name)
-                    with open(temp_file.name, 'rb') as f:
-                        audio_b64 = base64.b64encode(f.read()).decode()
+                    try:
+                        with open(temp_file.name, 'r', encoding='utf-8') as f:
+                            result['content'] = f.read()
+                            result['type'] = 'document'
+                    finally:
+                        os.unlink(temp_file.name)
                         
-                        # Include audio metadata
-                        duration = audio_msg.duration  # Duration in seconds
-                        file_size = audio_msg.file_size  # Size in bytes
-                        mime_type = "audio/ogg"
-                        if replied_msg.audio:
-                            mime_type = replied_msg.audio.mime_type or mime_type
-                            
-                        result['content'] = [{
-                            "text": f"[Audio file - Duration: {duration}s, Size: {file_size} bytes]"
-                        }, {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": audio_b64
-                            }
-                        }]
-                        result['type'] = 'audio'
-                
+        except ValueError as ve:
+            print(f"Voice/Audio reply rejected: {str(ve)}")
+            raise
         except Exception as e:
             print(f"Error processing replied message: {str(e)}")
             result['content'] = "[Error processing previous message]"
             result['type'] = 'error'
             
         return result
-        
     
     def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
         """
-        Format the reply context with role indicators.
+        Format the reply context with role indicators and current message.
         """
         if reply_info['type'] == 'image':
-            context_parts = reply_info['content']
-            context_parts[0]['text'] = f"{reply_info['role']}: [Image]"
-            return context_parts
+            image_content = reply_info['content'][0]
+            return [{
+                "text": f"{reply_info['role']}:\n[Image]"
+            }, {
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": image_content['image_data']
+                }
+            }, {
+                "text": f"\nuser: replyed to the previous message by [{current_message}]"
+            }]
         else:
             context = f"""{reply_info['role']}: {reply_info['content']}
     user: {current_message}"""
@@ -630,19 +620,54 @@ class AIBot:
     
         text = update.message.text
         
+
+        # Check for Instagram links first
+        instagram_match = self.INSTAGRAM_URL_REGEX.search(text)
+        if instagram_match:
+            url = instagram_match.group(0)
+            status_message = await self.retry_operation(
+                update.message.reply_text,
+                f"⏳ Automatically detected Instagram link. Downloading media..."
+            )
+            try:
+                await self.instagram_downloader._process_media(self,
+                                                               update,
+                                                               status_message,
+                                                               url,
+                                                               as_file=False)
+            finally:
+                try:
+                    shutil.rmtree(Path("instagram_media"), ignore_errors=True)
+                except Exception as e:
+                    print(f"Error cleaning up files: {str(e)}")
+            return
+
+        # Check for YouTube links
+        youtube_match = self.YOUTUBE_URL_REGEX.search(text)
+        if youtube_match:
+            url = youtube_match.group(0)
+            status_message = await self.retry_operation(
+                update.message.reply_text,
+                f"⏳ Automatically detected YouTube link. Converting to MP3...")
+            await self.youtube_downloader._process_download(
+                self, update, status_message, url)
+            return        
+        
         if self.INSTAGRAM_URL_REGEX.search(text) or self.YOUTUBE_URL_REGEX.search(text):
             return await self.handle_media_urls(update, text)
     
         try:
             chat = self.chat_history[user_id]
-            reply_info = await self.get_replied_message_content(update.message)
             
+            try:
+                reply_info = await self.get_replied_message_content(update.message)
+            except ValueError as ve:
+                await update.message.reply_text("Cannot reply to voice or audio messages")
+                return
+                
             if reply_info:
                 formatted_context = self.format_reply_context(reply_info, text)
-                if isinstance(formatted_context, list):
-                    await chat.send_message_async(formatted_context, role="user")
-                else:
-                    await chat.send_message_async(formatted_context, role="user")
+                await chat.send_message_async(formatted_context, role="user")
             else:
                 await chat.send_message_async(f"user: {text}", role="user")
             

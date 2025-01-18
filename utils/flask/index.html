@@ -1,4 +1,4 @@
-<!-- index.html v1.0.0 -->
+<!-- index.html v1.0.2 -->
 <html><head><base href="/"><!DOCTYPE html>
 <head>
     <title>Bot Configuration Manager</title>
@@ -261,9 +261,10 @@
                 <label>{{ category }}:</label>
                 <select id="{{ category }}">
                     <option value="BLOCK_NONE" {% if level == 'BLOCK_NONE' %}selected{% endif %}>BLOCK_NONE</option>
-                    <option value="BLOCK_LOW" {% if level == 'BLOCK_LOW' %}selected{% endif %}>BLOCK_LOW</option>
-                    <option value="BLOCK_MEDIUM" {% if level == 'BLOCK_MEDIUM' %}selected{% endif %}>BLOCK_MEDIUM</option>
-                    <option value="BLOCK_HIGH" {% if level == 'BLOCK_HIGH' %}selected{% endif %}>BLOCK_HIGH</option>
+                    <option value="BLOCK_ONLY_HIGH" {% if level == 'BLOCK_ONLY_HIGH' %}selected{% endif %}>BLOCK_ONLY_HIGH</option>
+                    <option value="BLOCK_MEDIUM_AND_ABOVE" {% if level == 'BLOCK_MEDIUM_AND_ABOVE' %}selected{% endif %}>BLOCK_MEDIUM_AND_ABOVE</option>
+                    <option value="BLOCK_LOW_AND_ABOVE" {% if level == 'BLOCK_LOW_AND_ABOVE' %}selected{% endif %}>BLOCK_LOW_AND_ABOVE</option>
+                    <option value="HARM_BLOCK_THRESHOLD_UNSPECIFIED" {% if level == 'HARM_BLOCK_THRESHOLD_UNSPECIFIED' %}selected{% endif %}>HARM_BLOCK_THRESHOLD_UNSPECIFIED</option>                                        
                 </select>
             </div>
             {% endfor %}
@@ -277,8 +278,11 @@
             <div class="form-group">
                 <label>Current System Prompt:</label>
                 <select id="system_prompt_file" onchange="updateSystemPromptFile(this.value)">
+                    <!-- {% for file in prompt_files %} -->
+                    <!-- <option value="{{ file }}" {% if file == config['system_prompt_file'] %}selected{% endif %}>{{ file }}</option> -->
+                    <!-- {% endfor %} -->
                     {% for file in prompt_files %}
-                    <option value="{{ file }}" {% if file == config['system_prompt_file'] %}selected{% endif %}>{{ file }}</option>
+                    <option value="{{ file }}" {% if file == 'telegram.txt' %}selected{% endif %}>{{ file }}</option>
                     {% endfor %}
                 </select>
             </div>

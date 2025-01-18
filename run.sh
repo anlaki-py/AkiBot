@@ -2,7 +2,7 @@
 
 # =============================================================================
 # AkiBot Setup Script
-# Version: 1.0.2
+# Version: 1.1.4
 # Description: Installation and configuration script for AkiBot
 # =============================================================================
 
@@ -41,7 +41,7 @@ if [ -n "$BASH_VERSION" ]; then
 fi
 
 # Constants and Configuration
-readonly VERSION="1.0.2"
+readonly VERSION="1.0.3"
 readonly CONFIG_DIR="config"
 readonly CONFIG_FILE="$CONFIG_DIR/config.json"
 readonly LOG_DIR="logs"
@@ -124,11 +124,50 @@ create_config() {
         return 0
     fi
 
+    # Collect user IDs
+    echo -e "${YELLOW}User ID Configuration:${NC}"
+    echo -e "• Enter user IDs one by one"
+    echo -e "• Press Enter with no input to finish"
+    echo -e "• If you leave the first entry empty, it will default to 'YOUR_ACCOUNT_ID'\n"
+
+    user_ids=()
+    first_entry=true
+    
+    while true; do
+        if [ "$first_entry" = true ]; then
+            read -p "Enter first user ID (Empty for default placeholder): " user_id
+            if [ -z "$user_id" ]; then
+                user_ids+=("\"YOUR_ACCOUNT_ID\"")
+                echo -e "${YELLOW}Using default placeholder 'YOUR_ACCOUNT_ID'${NC}"
+                break
+            fi
+        else
+            read -p "Enter additional user ID (Empty to finish): " user_id
+            if [ -z "$user_id" ]; then
+                break
+            fi
+        fi
+
+        # Validate user ID format
+        if [[ ! "$user_id" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
+            warning "Invalid user ID format. Use only letters, numbers, dots, underscores, and hyphens."
+            continue
+        fi
+
+        user_ids+=("\"$user_id\"")
+        first_entry=false
+    done
+
+    # Join user IDs with commas
+    allowed_users=$(printf "%s," "${user_ids[@]}" | sed 's/,$//')
+
+    echo -e "\n${YELLOW}Creating config file with ${#user_ids[@]} user(s)...${NC}"
+
     # Create the config.json file with the specified content
-    cat > "$CONFIG_FILE" <<EOL
+    if ! cat > "$CONFIG_FILE" <<EOL
 {
     "allowed_users": [
-        "YOUR_ACCOUNT_ID"
+        ${allowed_users}
     ],
     "gemini_model": "gemini-2.0-flash-exp",
     "generation_config": {
@@ -144,14 +183,26 @@ create_config() {
         "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
     },
-    "system_prompt_file": "system/default.txt"
+    "system_prompt_file": "system/telegram.txt"
 }
 EOL
+    then
+        error "Failed to write configuration file"
+        return 1
+    fi
 
-    if [ $? -eq 0 ]; then
-        success "Configuration file created successfully"
-    else
-        error "Failed to create configuration file"
+    # Verify the JSON syntax
+    if command -v python3 >/dev/null 2>&1; then
+        if ! python3 -c "import json; json.load(open('$CONFIG_FILE'))" 2>/dev/null; then
+            error "Generated config file contains invalid JSON"
+            rm -f "$CONFIG_FILE"
+            return 1
+        fi
+    fi
+
+    success "Configuration file created successfully with ${#user_ids[@]} user(s)"
+    if [[ "${user_ids[0]}" == "\"YOUR_ACCOUNT_ID\"" ]]; then
+        echo -e "${YELLOW}Remember to replace 'YOUR_ACCOUNT_ID' in $CONFIG_FILE with your actual user ID${NC}"
     fi
 }
 
@@ -177,7 +228,7 @@ run_main_application() {
 cleanup() {
     log "Cleaning up and exiting..."
     echo -e "\nApplication terminated. Cleaning up..."
-    # Add any cleanup tasks here
+    # Add any cleanup tasks here (nothing to clean for now)
     # exit 0
 }
 
@@ -222,101 +273,3 @@ main() {
 
 # Execute main function
 main "$@"
-
-# #!/bin/bash
-# clear
-
-# print_akibot_logo() {
-    # echo -e "\e[38;5;93m █████╗ ██╗  ██╗██╗██████╗  ██████╗ ████████╗"
-    # echo -e "\e[38;5;98m██╔══██╗██║ ██╔╝██║██╔══██╗██╔═══██╗╚══██╔══╝"
-    # echo -e "\e[38;5;104m███████║█████╔╝ ██║██████╔╝██║   ██║   ██║   "
-    # echo -e "\e[38;5;105m██╔══██║██╔═██╗ ██║██╔══██╗██║   ██║   ██║   "
-    # echo -e "\e[38;5;111m██║  ██║██║  ██╗██║██████╔╝╚██████╔╝   ██║   "
-    # echo -e "\e[38;5;147m╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═════╝  ╚═════╝    ╚═╝   "
-    # echo -e "\e[0m"
-# }
-
-# print_akibot_logo
-
-# # Define the directory and file path
-# CONFIG_DIR="config"
-# CONFIG_FILE="$CONFIG_DIR/config.json"
-
-# # Function to handle Ctrl+C
-# cleanup() {
-    # echo -e "\nApplication terminated. Exiting script."
-    # exit 0
-# }
-
-# # Trap Ctrl+C and call cleanup function
-# trap cleanup SIGINT
-
-# # Check if the configuration file exists
-# if [ ! -f "$CONFIG_FILE" ]; then
-    # # Create the directory if it doesn't exist
-    # mkdir -p "$CONFIG_DIR"
-
-    # # Create the config.json file with the specified content
-    # cat > "$CONFIG_FILE" <<EOL
-# {
-    # "allowed_users": [
-        # "YOUR ACCOUNT ID HERE"
-    # ],
-    # "gemini_model": "gemini-2.0-flash-exp",
-    # "generation_config": {
-        # "temperature": 0.7,
-        # "top_p": 0.9,
-        # "top_k": 40,
-        # "max_output_tokens": 1024,
-        # "response_mime_type": "text/plain"
-    # },
-    # "safety_settings": [
-        # {
-            # "category": "HARM_CATEGORY_HATE_SPEECH",
-            # "threshold": "BLOCK_NONE"
-        # },
-        # {
-            # "category": "HARM_CATEGORY_HARASSMENT",
-            # "threshold": "BLOCK_NONE"
-        # },
-        # {
-            # "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            # "threshold": "BLOCK_NONE"
-        # },
-        # {
-            # "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-            # "threshold": "BLOCK_NONE"
-        # }
-    # ],
-    # "system_prompt_file": "system/default.txt"
-# }
-# EOL
-
-    # echo "Configuration file created at $CONFIG_FILE"
-# else
-    # echo "Configuration file already exists at $CONFIG_FILE"
-# fi
-
-# # Ask if the user wants to run ${MAIN_PYTHON_FILE}
-# read -p "Run ${MAIN_PYTHON_FILE}? [Y/n]: " run_main
-
-# if [[ "$run_main" == "y" || "$run_main" == "yes" || -z "$run_main" ]]; then
-    # # Run the ${MAIN_PYTHON_FILE} application
-    # clear
-    # print_akibot_logo
-    # echo -e "AkiBot v1.0.2"
-    # echo -e "Running ${MAIN_PYTHON_FILE}...\n"
-    # python ${MAIN_PYTHON_FILE}
-    # clear
-
-    # # If the script reaches this point, notify the user
-    # echo "Script completed. Exiting."
-# elif [[ "$run_main" == "n" || "$run_main" == "no" ]]; then
-    # echo "Exiting script."
-    # clear
-    # # exit 0
-# else
-    # echo "Invalid input. Exiting script."
-    # clear
-    # exit 1
-# fi
