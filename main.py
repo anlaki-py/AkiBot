@@ -524,7 +524,7 @@ class AIBot:
 
 # ==============================================================================================================
 
-    # still can't reply to voice messages and audio files
+    # still can't reply to audio 
     async def get_replied_message_content(self, message: Message) -> Optional[dict]:
         """
         Extract content and metadata from the replied-to message.
@@ -559,13 +559,10 @@ class AIBot:
                         img.save(buf, format='JPEG')
                         img_b64 = base64.b64encode(buf.getvalue()).decode()
                         result['content'] = [{
-                            "type": "text",
                             "text": "[Image]"
                         }, {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
                                 "data": img_b64
                             }
                         }]
@@ -578,7 +575,7 @@ class AIBot:
                         result['content'] = f.read()
                         result['type'] = 'document'
             elif replied_msg.voice or replied_msg.audio:
-                # Handle audio replies
+                # Handle audio replies with proper audio data
                 audio_msg = replied_msg.voice or replied_msg.audio
                 file_obj = await self.retry_operation(audio_msg.get_file)
                 
@@ -588,25 +585,18 @@ class AIBot:
                         audio_b64 = base64.b64encode(f.read()).decode()
                         
                         # Include audio metadata
-                        duration = audio_msg.duration
-                        file_size = audio_msg.file_size
+                        duration = audio_msg.duration  # Duration in seconds
+                        file_size = audio_msg.file_size  # Size in bytes
                         mime_type = "audio/ogg"
                         if replied_msg.audio:
                             mime_type = replied_msg.audio.mime_type or mime_type
                             
                         result['content'] = [{
-                            "type": "text",
-                            "text": f"[Audio message - {duration}s]"
+                            "text": f"[Audio file - Duration: {duration}s, Size: {file_size} bytes]"
                         }, {
-                            "type": "audio",
-                            "source": {
-                                "type": "base64",
-                                "media_type": mime_type,
+                            "inline_data": {
+                                "mime_type": mime_type,
                                 "data": audio_b64
-                            },
-                            "metadata": {
-                                "duration_seconds": duration,
-                                "file_size_bytes": file_size
                             }
                         }]
                         result['type'] = 'audio'
@@ -695,24 +685,16 @@ class AIBot:
             reply_info = await self.get_replied_message_content(update.message)
             
             if reply_info:
-                if reply_info['type'] in ['image', 'audio']:
-                    # For media types, send the formatted content list directly
-                    await self.chat_history[user_id].send_message_async(
-                        reply_info['content'], 
-                        role=reply_info['role']
-                    )
+                formatted_context = self.format_reply_context(
+                    reply_info,
+                    update.message.caption or "[No caption]"
+                )
+                
+                if isinstance(formatted_context, list):
+                    await self.chat_history[user_id].send_message_async(formatted_context, role="user")
                 else:
-                    # For text-based replies, use the existing format
-                    formatted_context = self.format_reply_context(
-                        reply_info,
-                        update.message.caption or "[No caption]"
-                    )
-                    await self.chat_history[user_id].send_message_async(
-                        formatted_context,
-                        role="user"
-                    )
+                    await self.chat_history[user_id].send_message_async(formatted_context, role="user")
     
-            # Handle the current message's media
             if update.message.photo:
                 file_obj = await self.retry_operation(update.message.photo[-1].get_file)
                 result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
@@ -724,42 +706,8 @@ class AIBot:
                 file_obj = await self.retry_operation(update.message.document.get_file)
                 result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
             elif update.message.audio or update.message.voice:
-                audio_msg = update.message.audio or update.message.voice
-                file_obj = await self.retry_operation(audio_msg.get_file)
-                
-                # Process audio file similarly to replied audio messages
-                with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
-                    await file_obj.download_to_drive(temp_file.name)
-                    with open(temp_file.name, 'rb') as f:
-                        audio_b64 = base64.b64encode(f.read()).decode()
-                        
-                        duration = audio_msg.duration
-                        file_size = audio_msg.file_size
-                        mime_type = "audio/ogg"
-                        if update.message.audio:
-                            mime_type = update.message.audio.mime_type or mime_type
-                        
-                        audio_content = [{
-                            "type": "text",
-                            "text": f"[Audio message - {duration}s]"
-                        }, {
-                            "type": "audio",
-                            "source": {
-                                "type": "base64",
-                                "media_type": mime_type,
-                                "data": audio_b64
-                            },
-                            "metadata": {
-                                "duration_seconds": duration,
-                                "file_size_bytes": file_size
-                            }
-                        }]
-                        
-                        await self.chat_history[user_id].send_message_async(
-                            audio_content,
-                            role="user"
-                        )
-                        result = "Audio message processed"
+                file_obj = await self.retry_operation((update.message.audio or update.message.voice).get_file)
+                result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
             else:
                 result = "Unsupported media type"
     
@@ -770,6 +718,7 @@ class AIBot:
                 update.message.reply_text,
                 f"Error handling media: {str(e)}"
             )
+    
     
 
 
