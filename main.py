@@ -352,7 +352,7 @@ class AIBot:
             response = await self.generate_content(chat.history)
             text_response = await self.handle_gemini_response(response)
             
-            await chat.send_message_async(f"assistant: {text_response}", role="assistant")
+            await chat.send_message_async(f"{text_response}", role="assistant")
             await self.save_chat_history(user_id, username)
             return text_response
         except Exception as e:
