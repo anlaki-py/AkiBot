@@ -1,4 +1,4 @@
-# main.py v1.4.12
+# main.py v1.4.13
 import os
 import json
 import tempfile
@@ -275,13 +275,6 @@ class AIBot:
                     self.config.system_instructions,
                     role="system")
 
-
-
-
-
-
-
-
     async def process_file(self, message: Message, process_func: Callable) -> Optional[str]:
         """Generic file processing with cleanup and retry logic."""
         temp_file = None
@@ -357,11 +350,6 @@ class AIBot:
             return text_response
         except Exception as e:
             return f"Error processing file: {str(e)}"
-
-
-
-
-
 
 # = Instagram Downloader =============================================================================================================
 
@@ -524,81 +512,6 @@ class AIBot:
 
 # ==============================================================================================================
 
-
-
-        
-    
-    # async def get_replied_message_content(self, message: Message) -> Optional[dict]:
-        # """
-        # Extract content and metadata from the replied-to message.
-        # Returns a dictionary containing:
-        # - content: The message content
-        # - role: 'assistant' or 'user'
-        # - type: The type of message (text, image, document, audio)
-        # """
-        # if not message.reply_to_message:
-            # return None
-            
-        # replied_msg = message.reply_to_message
-        # result = {
-            # 'content': None,
-            # 'role': 'assistant' if replied_msg.from_user.is_bot else 'user',
-            # 'type': 'unknown'
-        # }
-        
-        # try:
-            # if replied_msg.voice or replied_msg.audio:
-                # raise ValueError("Cannot reply to voice or audio messages")
-                
-            # if replied_msg.text:
-                # result['content'] = replied_msg.text
-                # result['type'] = 'text'
-            # elif replied_msg.photo:
-                # file_obj = await self.retry_operation(replied_msg.photo[-1].get_file)
-                # with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
-                    # await file_obj.download_to_drive(temp_file.name)
-                    # try:
-                        # with Image.open(temp_file.name) as img:
-                            # buf = io.BytesIO()
-                            # img.save(buf, format='JPEG')
-                            # img_b64 = base64.b64encode(buf.getvalue()).decode()
-                            # result['content'] = [{
-                                # "text": "[Image]",
-                                # "image_data": img_b64,
-                                # "caption": replied_msg.caption or ""
-                            # }]
-                            # result['type'] = 'image'
-                    # finally:
-                        # os.unlink(temp_file.name)
-            # elif replied_msg.document and replied_msg.document.file_name.endswith(tuple(self.allowed_extensions)):
-                # file_obj = await self.retry_operation(replied_msg.document.get_file)
-                # with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                    # await file_obj.download_to_drive(temp_file.name)
-                    # try:
-                        # with open(temp_file.name, 'r', encoding='utf-8') as f:
-                            # result['content'] = f.read()
-                            # result['type'] = 'document'
-                    # finally:
-                        # os.unlink(temp_file.name)
-                        
-        # except ValueError as ve:
-            # print(f"Voice/Audio reply rejected: {str(ve)}")
-            # raise
-        # except Exception as e:
-            # print(f"Error processing replied message: {str(e)}")
-            # result['content'] = "[Error processing previous message]"
-            # result['type'] = 'error'
-            
-        # return result
-
-
-
-
-
-
-
-
-
     async def get_replied_message_content(self, message: Message) -> Optional[dict]:
         """
         Extract content and metadata from the replied-to message.
@@ -662,44 +575,6 @@ class AIBot:
             result['type'] = 'error'
                 
         return result
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    # def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
-        # """
-        # Format the reply context with role indicators and current message.
-        # """
-        # if reply_info['type'] == 'image':
-            # image_content = reply_info['content'][0]
-            # return [{
-                # # "text": f"{reply_info['role']}:\n[Image]" # replying to images without including it's caption
-                # "text": f"{reply_info['role']}: # IMAGE THAT USER REPLYING TO WITH IT'S CAPTION\n[Image Caption: {image_content['caption']}]\nImage: [Image]" # including the caption of that image 
-            # }, {
-                # "inline_data": {
-                    # "mime_type": "image/jpeg",
-                    # "data": image_content['image_data']
-                # }
-            # }, {
-                # "text": f"\nuser: replyed to the previous Image by: [{current_message}]"
-            # }]
-        # else:
-            # context = f"""{reply_info['role']}: {reply_info['content']}
-    # user: {current_message}"""
-            # return context
-
-
-
-    
     
     def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
         """
@@ -749,11 +624,7 @@ class AIBot:
                 f"REPLIED MESSAGE: {reply_info['content']}\n\n"
                 f"USER'S REPLY: {current_message}"
             )
-    
-
-
-
-    
+        
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Text message handler with role indicators."""
         user_id = str(update.effective_user.id)
@@ -842,67 +713,6 @@ class AIBot:
                 error_message
             )
 
-
-
-
-
-
-
-
-
-
-    
-    # async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        # """Media message handler with role indicators."""
-        # user_id = str(update.effective_user.id)
-        # username = str(update.effective_user.username)
-        # await self.initialize_chat(user_id, username)
-    
-        # try:
-            # reply_info = await self.get_replied_message_content(update.message)
-            
-            # if reply_info:
-                # formatted_context = self.format_reply_context(
-                    # reply_info,
-                    # update.message.caption or "[No caption]"
-                # )
-                
-                # if isinstance(formatted_context, list):
-                    # await self.chat_history[user_id].send_message_async(formatted_context, role="user")
-                # else:
-                    # await self.chat_history[user_id].send_message_async(formatted_context, role="user")
-    
-            # if update.message.photo:
-                # file_obj = await self.retry_operation(update.message.photo[-1].get_file)
-                # result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
-            # elif update.message.document:
-                # file_extension = os.path.splitext(update.message.document.file_name)[1].lower()
-                # if file_extension not in self.allowed_extensions:
-                    # await self.retry_operation(update.message.reply_text, "Unsupported document type.")
-                    # return
-                # file_obj = await self.retry_operation(update.message.document.get_file)
-                # result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
-            # elif update.message.audio or update.message.voice:
-                # file_obj = await self.retry_operation((update.message.audio or update.message.voice).get_file)
-                # result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
-            # else:
-                # result = "Unsupported media type"
-    
-            # await self.retry_operation(update.message.reply_text, result)
-            
-        # except Exception as e:
-            # await self.retry_operation(
-                # update.message.reply_text,
-                # f"Error handling media: {str(e)}"
-            # )
-    
-    
-
-
-
-
-
-
     async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Media message handler with improved voice message handling."""
         user_id = str(update.effective_user.id)
@@ -950,123 +760,6 @@ class AIBot:
                 update.message.reply_text,
                 f"Error handling media: {str(e)}"
             )
-
-
-
-
-# ==============================================================================================================
-# ==============================================================================================================
-# ==============================================================================================================
-# ==============================================================================================================
-
-
-
-
-
-
-
-    # @check_user_access
-    # async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        # """Text message handler with improved error handling and response processing."""
-        # user_id = str(update.effective_user.id)
-        # username = str(update.effective_user.username)
-        # await self.initialize_chat(user_id, username)
-    
-        # text = update.message.text
-    
-        # # Handle special URLs first (Instagram, YouTube)
-        # if self.INSTAGRAM_URL_REGEX.search(text) or self.YOUTUBE_URL_REGEX.search(text):
-            # return await self.handle_media_urls(update, text)
-    
-        # try:
-            # chat = self.chat_history[user_id]
-            # await chat.send_message_async(text, role="user")
-            
-            # # Generate response with retry logic
-            # response = await self.retry_operation(
-                # self.generate_content,
-                # chat.history,
-                # stream=False
-            # )
-            
-            # # Process the response
-            # text_response = await self.handle_gemini_response(response)
-            
-            # # Save AI response to history
-            # await chat.send_message_async(text_response, role="assistant")
-            # await self.save_chat_history(user_id, username)
-            
-            # # Send response in chunks if too long
-            # if len(text_response) > 4096:
-                # for chunk in [text_response[i:i+4096] for i in range(0, len(text_response), 4096)]:
-                    # await self.retry_operation(
-                        # update.message.reply_text,
-                        # chunk
-                    # )
-            # else:
-                # await self.retry_operation(
-                    # update.message.reply_text,
-                    # text_response
-                # )
-                
-        # except Exception as e:
-            # error_message = f"An error occurred: {str(e)}"
-            # await self.retry_operation(
-                # update.message.reply_text,
-                # error_message
-            # )
-                
-    # @check_user_access
-    # async def handle_media(self, update: Update,
-                           # context: ContextTypes.DEFAULT_TYPE) -> None:
-        # """Media message handler with retry logic."""
-        # user_id = str(update.effective_user.id)
-        # username = str(update.effective_user.username)
-        # await self.initialize_chat(user_id, username)
-
-        # try:
-            # if update.message.photo:
-                # file_obj = await self.retry_operation(
-                    # update.message.photo[-1].get_file)
-                # result = await self.process_file(
-                    # update.message,
-                    # lambda path: file_obj.download_to_drive(path))
-            # elif update.message.document:
-                # file_extension = os.path.splitext(
-                    # update.message.document.file_name)[1].lower()
-                # if file_extension not in self.allowed_extensions:
-                    # await self.retry_operation(update.message.reply_text,
-                                               # "Unsupported document type.")
-                    # return
-                # file_obj = await self.retry_operation(
-                    # update.message.document.get_file)
-                # result = await self.process_file(
-                    # update.message,
-                    # lambda path: file_obj.download_to_drive(path))
-            # elif update.message.audio or update.message.voice:
-                # file_obj = await self.retry_operation(
-                    # (update.message.audio or update.message.voice).get_file)
-                # result = await self.process_file(
-                    # update.message,
-                    # lambda path: file_obj.download_to_drive(path))
-            # else:
-                # result = "Unsupported media type"
-
-            # await self.retry_operation(
-                # update.message.reply_text,
-                # result,
-                # # parse_mode='Markdown'
-            # )
-        # except Exception as e:
-            # await self.retry_operation(update.message.reply_text,
-                                       # f"Error handling media: {str(e)}")
-
-
-
-
-
-
-
 
     async def count_tokens(self, contents):
         """Count tokens in the content to manage context window."""
