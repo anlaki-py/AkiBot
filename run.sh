@@ -183,7 +183,7 @@ create_config() {
         "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
     },
-    "system_prompt_file": "system/telegram.txt"
+    "system_prompt_file": "system/telegramV3.txt"
 }
 EOL
     then
