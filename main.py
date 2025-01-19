@@ -1,4 +1,4 @@
-# main.py v1.4.9
+# main.py v1.4.12
 import os
 import json
 import tempfile
@@ -528,17 +528,92 @@ class AIBot:
 
         
     
+    # async def get_replied_message_content(self, message: Message) -> Optional[dict]:
+        # """
+        # Extract content and metadata from the replied-to message.
+        # Returns a dictionary containing:
+        # - content: The message content
+        # - role: 'assistant' or 'user'
+        # - type: The type of message (text, image, document, audio)
+        # """
+        # if not message.reply_to_message:
+            # return None
+            
+        # replied_msg = message.reply_to_message
+        # result = {
+            # 'content': None,
+            # 'role': 'assistant' if replied_msg.from_user.is_bot else 'user',
+            # 'type': 'unknown'
+        # }
+        
+        # try:
+            # if replied_msg.voice or replied_msg.audio:
+                # raise ValueError("Cannot reply to voice or audio messages")
+                
+            # if replied_msg.text:
+                # result['content'] = replied_msg.text
+                # result['type'] = 'text'
+            # elif replied_msg.photo:
+                # file_obj = await self.retry_operation(replied_msg.photo[-1].get_file)
+                # with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                    # await file_obj.download_to_drive(temp_file.name)
+                    # try:
+                        # with Image.open(temp_file.name) as img:
+                            # buf = io.BytesIO()
+                            # img.save(buf, format='JPEG')
+                            # img_b64 = base64.b64encode(buf.getvalue()).decode()
+                            # result['content'] = [{
+                                # "text": "[Image]",
+                                # "image_data": img_b64,
+                                # "caption": replied_msg.caption or ""
+                            # }]
+                            # result['type'] = 'image'
+                    # finally:
+                        # os.unlink(temp_file.name)
+            # elif replied_msg.document and replied_msg.document.file_name.endswith(tuple(self.allowed_extensions)):
+                # file_obj = await self.retry_operation(replied_msg.document.get_file)
+                # with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                    # await file_obj.download_to_drive(temp_file.name)
+                    # try:
+                        # with open(temp_file.name, 'r', encoding='utf-8') as f:
+                            # result['content'] = f.read()
+                            # result['type'] = 'document'
+                    # finally:
+                        # os.unlink(temp_file.name)
+                        
+        # except ValueError as ve:
+            # print(f"Voice/Audio reply rejected: {str(ve)}")
+            # raise
+        # except Exception as e:
+            # print(f"Error processing replied message: {str(e)}")
+            # result['content'] = "[Error processing previous message]"
+            # result['type'] = 'error'
+            
+        # return result
+
+
+
+
+
+
+
+
+
     async def get_replied_message_content(self, message: Message) -> Optional[dict]:
         """
         Extract content and metadata from the replied-to message.
-        Returns a dictionary containing:
-        - content: The message content
-        - role: 'assistant' or 'user'
-        - type: The type of message (text, image, document, audio)
+        Returns None if this is a new message (not a reply).
+        
+        Args:
+            message: The Telegram message object
+        
+        Returns:
+            Optional[dict]: Message content and metadata if it's a reply, None otherwise
         """
+        # First, explicitly check if this is a reply
         if not message.reply_to_message:
             return None
-            
+                
         replied_msg = message.reply_to_message
         result = {
             'content': None,
@@ -547,9 +622,6 @@ class AIBot:
         }
         
         try:
-            if replied_msg.voice or replied_msg.audio:
-                raise ValueError("Cannot reply to voice or audio messages")
-                
             if replied_msg.text:
                 result['content'] = replied_msg.text
                 result['type'] = 'text'
@@ -580,37 +652,107 @@ class AIBot:
                             result['type'] = 'document'
                     finally:
                         os.unlink(temp_file.name)
-                        
-        except ValueError as ve:
-            print(f"Voice/Audio reply rejected: {str(ve)}")
-            raise
+            elif replied_msg.voice or replied_msg.audio:
+                result['content'] = "[Audio message]"
+                result['type'] = 'audio'
+                            
         except Exception as e:
             print(f"Error processing replied message: {str(e)}")
             result['content'] = "[Error processing previous message]"
             result['type'] = 'error'
-            
+                
         return result
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    # def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
+        # """
+        # Format the reply context with role indicators and current message.
+        # """
+        # if reply_info['type'] == 'image':
+            # image_content = reply_info['content'][0]
+            # return [{
+                # # "text": f"{reply_info['role']}:\n[Image]" # replying to images without including it's caption
+                # "text": f"{reply_info['role']}: # IMAGE THAT USER REPLYING TO WITH IT'S CAPTION\n[Image Caption: {image_content['caption']}]\nImage: [Image]" # including the caption of that image 
+            # }, {
+                # "inline_data": {
+                    # "mime_type": "image/jpeg",
+                    # "data": image_content['image_data']
+                # }
+            # }, {
+                # "text": f"\nuser: replyed to the previous Image by: [{current_message}]"
+            # }]
+        # else:
+            # context = f"""{reply_info['role']}: {reply_info['content']}
+    # user: {current_message}"""
+            # return context
+
+
+
+    
     
     def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
         """
-        Format the reply context with role indicators and current message.
+        Format the reply context with detailed metadata about the replied message.
+        
+        Args:
+            reply_info (dict): Information about the replied message
+            current_message (str): The current reply message
+        
+        Returns:
+            Union[str, list]: Formatted context including metadata about reply relationship
         """
+        role_label = "AI assistant" if reply_info['role'] == "assistant" else "user"
+        message_age = "previous" # You could calculate actual age if you store timestamps
+        
         if reply_info['type'] == 'image':
             image_content = reply_info['content'][0]
             return [{
-                "text": f"{reply_info['role']}:\n[Image]"
+                "text": (
+                    f"CONTEXT: User is replying to a {message_age} image message sent by {role_label}\n"
+                    f"REPLIED IMAGE DETAILS:\n"
+                    f"- Type: Image message\n"
+                    f"- Sender: {role_label}\n"
+                    f"- Caption: {image_content['caption'] or '[No caption]'}\n"
+                    f"IMAGE DATA: [Image follows below]\n"
+                )
             }, {
                 "inline_data": {
                     "mime_type": "image/jpeg",
                     "data": image_content['image_data']
                 }
             }, {
-                "text": f"\nuser: replyed to the previous message by [{current_message}]"
+                "text": f"\nUSER'S REPLY: {current_message}"
             }]
-        else:
-            context = f"""{reply_info['role']}: {reply_info['content']}
-    user: {current_message}"""
-            return context
+        elif reply_info['type'] == 'document':
+            return (
+                f"CONTEXT: User is replying to a {message_age} document message sent by {role_label}\n"
+                f"REPLIED DOCUMENT DETAILS:\n"
+                f"- Type: Text document\n"
+                f"- Sender: {role_label}\n"
+                f"- Content: {reply_info['content']}\n\n"
+                f"USER'S REPLY: {current_message}"
+            )
+        else:  # text message
+            return (
+                f"CONTEXT: User is replying to a {message_age} text message sent by {role_label}\n"
+                f"REPLIED MESSAGE: {reply_info['content']}\n\n"
+                f"USER'S REPLY: {current_message}"
+            )
+    
+
+
+
     
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Text message handler with role indicators."""
@@ -699,28 +841,96 @@ class AIBot:
                 update.message.reply_text,
                 error_message
             )
+
+
+
+
+
+
+
+
+
+
     
+    # async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        # """Media message handler with role indicators."""
+        # user_id = str(update.effective_user.id)
+        # username = str(update.effective_user.username)
+        # await self.initialize_chat(user_id, username)
+    
+        # try:
+            # reply_info = await self.get_replied_message_content(update.message)
+            
+            # if reply_info:
+                # formatted_context = self.format_reply_context(
+                    # reply_info,
+                    # update.message.caption or "[No caption]"
+                # )
+                
+                # if isinstance(formatted_context, list):
+                    # await self.chat_history[user_id].send_message_async(formatted_context, role="user")
+                # else:
+                    # await self.chat_history[user_id].send_message_async(formatted_context, role="user")
+    
+            # if update.message.photo:
+                # file_obj = await self.retry_operation(update.message.photo[-1].get_file)
+                # result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
+            # elif update.message.document:
+                # file_extension = os.path.splitext(update.message.document.file_name)[1].lower()
+                # if file_extension not in self.allowed_extensions:
+                    # await self.retry_operation(update.message.reply_text, "Unsupported document type.")
+                    # return
+                # file_obj = await self.retry_operation(update.message.document.get_file)
+                # result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
+            # elif update.message.audio or update.message.voice:
+                # file_obj = await self.retry_operation((update.message.audio or update.message.voice).get_file)
+                # result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
+            # else:
+                # result = "Unsupported media type"
+    
+            # await self.retry_operation(update.message.reply_text, result)
+            
+        # except Exception as e:
+            # await self.retry_operation(
+                # update.message.reply_text,
+                # f"Error handling media: {str(e)}"
+            # )
+    
+    
+
+
+
+
+
+
     async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Media message handler with role indicators."""
+        """Media message handler with improved voice message handling."""
         user_id = str(update.effective_user.id)
         username = str(update.effective_user.username)
         await self.initialize_chat(user_id, username)
     
         try:
-            reply_info = await self.get_replied_message_content(update.message)
-            
-            if reply_info:
-                formatted_context = self.format_reply_context(
-                    reply_info,
-                    update.message.caption or "[No caption]"
-                )
+            # Only check for reply if this message isn't a voice/audio message
+            if not (update.message.voice or update.message.audio):
+                reply_info = await self.get_replied_message_content(update.message)
                 
-                if isinstance(formatted_context, list):
-                    await self.chat_history[user_id].send_message_async(formatted_context, role="user")
-                else:
-                    await self.chat_history[user_id].send_message_async(formatted_context, role="user")
+                if reply_info:
+                    formatted_context = self.format_reply_context(
+                        reply_info,
+                        update.message.caption or "[No caption]"
+                    )
+                    
+                    if isinstance(formatted_context, list):
+                        await self.chat_history[user_id].send_message_async(formatted_context, role="user")
+                    else:
+                        await self.chat_history[user_id].send_message_async(formatted_context, role="user")
     
-            if update.message.photo:
+            # Handle different media types
+            if update.message.voice or update.message.audio:
+                # Handle voice/audio message as a new message, not a reply
+                file_obj = await self.retry_operation((update.message.voice or update.message.audio).get_file)
+                result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
+            elif update.message.photo:
                 file_obj = await self.retry_operation(update.message.photo[-1].get_file)
                 result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
             elif update.message.document:
@@ -730,26 +940,24 @@ class AIBot:
                     return
                 file_obj = await self.retry_operation(update.message.document.get_file)
                 result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
-            elif update.message.audio or update.message.voice:
-                file_obj = await self.retry_operation((update.message.audio or update.message.voice).get_file)
-                result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
             else:
                 result = "Unsupported media type"
     
             await self.retry_operation(update.message.reply_text, result)
-            
+                
         except Exception as e:
             await self.retry_operation(
                 update.message.reply_text,
                 f"Error handling media: {str(e)}"
             )
-    
-    
 
 
 
 
-
+# ==============================================================================================================
+# ==============================================================================================================
+# ==============================================================================================================
+# ==============================================================================================================
 
 
 
