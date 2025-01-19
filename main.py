@@ -1,4 +1,4 @@
-# main.py v1.4.13
+# main.py v1.4.14
 import os
 import json
 import tempfile
@@ -512,6 +512,7 @@ class AIBot:
 
 # ==============================================================================================================
 
+    @check_user_access
     async def get_replied_message_content(self, message: Message) -> Optional[dict]:
         """
         Extract content and metadata from the replied-to message.
@@ -624,7 +625,8 @@ class AIBot:
                 f"REPLIED MESSAGE: {reply_info['content']}\n\n"
                 f"USER'S REPLY: {current_message}"
             )
-        
+    
+    @check_user_access    
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Text message handler with role indicators."""
         user_id = str(update.effective_user.id)
@@ -712,7 +714,8 @@ class AIBot:
                 update.message.reply_text,
                 error_message
             )
-
+            
+    @check_user_access
     async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Media message handler with improved voice message handling."""
         user_id = str(update.effective_user.id)

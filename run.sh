@@ -2,7 +2,7 @@
 
 # =============================================================================
 # AkiBot Setup Script
-# Version: 1.1.4
+# Version: 1.1.5
 # Description: Installation and configuration script for AkiBot
 # =============================================================================
 
