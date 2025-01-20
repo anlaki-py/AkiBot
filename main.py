@@ -512,7 +512,6 @@ class AIBot:
 
 # ==============================================================================================================
 
-    @check_user_access
     async def get_replied_message_content(self, message: Message) -> Optional[dict]:
         """
         Extract content and metadata from the replied-to message.
