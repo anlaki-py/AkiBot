@@ -1,4 +1,4 @@
-# main.py v1.4.45
+# main.py v1.4.46
 """
 === MAINTENANCE AND MODIFICATION GUIDE ===
 
@@ -8,9 +8,10 @@ This Telegram bot integrates Gemini AI, media downloaders, and web conversion to
 - Configuration System:
   • Modify config/config.json for settings (not Config class logic)
   • Add new env variables ONLY through the Config class
-- Security Decorators (@check_user_access):
+- Security Decorators (@check_user_access and @global_user_access):
   • Preserve user ID validation logic
   • Modify allowed_users list in config.json for access control
+  • Use @global_user_access to block a certain feature for everyone
 - API Handlers (Gemini/YouTube/Instagram):
   • Keep retry logic and error handling intact
   • Update regex patterns cautiously (INSTAGRAM_URL_REGEX/YOUTUBE_URL_REGEX)
@@ -111,6 +112,7 @@ from utils.commands.web2md import WebToMarkdownConverter
 from utils.commands.start import start_command
 from utils.commands.help import help_command
 from utils.commands.clear import clear_command
+from utils.commands.think import think_command
 
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
@@ -498,7 +500,13 @@ class AIBot:
     async def web2md_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler for /web2md command to convert webpages to Markdown."""
         await self.web2md_converter.handle_web2md_command(self, update, context)
-        
+# = Thinking command ============================================================================================================
+
+    @check_user_access
+    async def think_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handler for /think command with detailed reasoning"""
+        await think_command.handle_think_command(self, update, context)
+    
 # = Basic Commands ============================================================================================================
 
     @check_user_access
@@ -693,7 +701,7 @@ class AIBot:
                 stream=False
             )
             
-            text_response = await self.handle_gemini_response(response)
+            text_response = await self.handle_gemini_response(response)                        
             await chat.send_message_async(f"{text_response}", role="assistant")
             await self.save_chat_history(user_id, username)
             
@@ -806,7 +814,8 @@ class AIBot:
             application.add_handler(CommandHandler("insta", self.insta_command))
             application.add_handler(CommandHandler("instaFile", self.insta_file_command))
             application.add_handler(CommandHandler("ytb2mp3", self.ytb2mp3_command))
-            application.add_handler(CommandHandler("web2md", self.web2md_command))           
+            application.add_handler(CommandHandler("web2md", self.web2md_command))
+            application.add_handler(CommandHandler("think", self.think_command))    
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
             application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL | filters.AUDIO | filters.VOICE, self.handle_media)); print(f"\nBot is running...\n")      
             application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)

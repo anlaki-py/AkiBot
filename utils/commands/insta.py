@@ -1,8 +1,8 @@
-# instagram_downloader.py v1.0.0
+# instagram_downloader.py v1.2.5
 import telegram
 from telegram import Update
 from telegram.ext import ContextTypes
-from telegram.error import RetryAfter
+from telegram.error import RetryAfter, BadRequest 
 
 from instaloader import Instaloader, Post, exceptions
 import urllib.parse
@@ -22,7 +22,7 @@ class InstagramDownloader:
         """Format post information into a readable caption."""
         upload_date = post.date_local.strftime("%Y-%m-%d %H:%M")
         
-        caption = f"📱 Posted by [@{post.owner_username}](instagram.com/{post.owner_username})\n"
+        caption = f"📱 Posted by instagram.com/{post.owner_username}\n"
         caption += f"📅 {upload_date}\n"
         caption += f"❤️ {post.likes:,} likes\n"
         caption += f"💬 {post.comments:,} comments\n"
@@ -155,20 +155,33 @@ class InstagramDownloader:
                     )
 
                 # Prepare media group
-                current_caption = post_info if group_index == 1 else None
-                media_group = self._prepare_media_group(group_files, as_file, current_caption)
+                media_group = self._prepare_media_group(group_files, as_file, None)
 
                 # Send media group with timeout handling
                 await self._send_media_group_with_timeout(bot_instance, update, media_group)
 
-                # Add small delay between groups to prevent rate limiting
+                # Add small delay between groups
                 if group_index < total_groups:
                     await asyncio.sleep(2)
 
-            await bot_instance.retry_operation(
-                status_message.edit_text,
-                "✅ Media downloaded and sent successfully!"
-            )
+            # Send caption with Markdown fallback
+            if post_info:
+                try:
+                    # Try sending with Markdown first
+                    await update.message.reply_text(
+                        post_info,
+                        parse_mode='Markdown'
+                    )
+                except BadRequest as e:
+                    if "Can't parse entities" in str(e):
+                        # If Markdown parsing fails, send without parse mode
+                        await update.message.reply_text(post_info)
+                    else:
+                        # Re-raise other errors
+                        raise
+
+            # Delete status message
+            await bot_instance.retry_operation(status_message.delete)
 
         except Exception as e:
             await bot_instance.retry_operation(
@@ -180,21 +193,17 @@ class InstagramDownloader:
         self,
         media_files: List[str],
         as_file: bool,
-        caption: Optional[str]
+        caption: Optional[str]  # Now unused, retained for compatibility
     ) -> List[Union[telegram.InputMediaPhoto, telegram.InputMediaVideo, telegram.InputMediaDocument]]:
-        """Prepare media group based on file types and sending mode."""
+        """Prepare media group without captions."""
         media_group = []
     
-        for i, file_path in enumerate(media_files):
+        for file_path in media_files:
             file = open(file_path, 'rb')
-            # Add caption only to the first media item
-            current_caption = caption if i == 0 else ""
-            
-            # Common parameters for all media types
             media_params = {
                 'media': file,
-                'caption': current_caption,
-                'parse_mode': 'Markdown'  # Add this line to enable Markdown parsing
+                'caption': "",  # No caption
+                'parse_mode': 'Markdown'
             }
             
             if as_file:
