@@ -1,4 +1,4 @@
-# ytb2transcript.py v1.0.3
+# ytb2transcript.py v1.0.2
 import re
 import io
 import os
@@ -10,22 +10,18 @@ from telegram.ext import ContextTypes
 from typing import Optional, Dict, Any
 
 class YouTubeTranscriptHandler:
-    CANCEL_COMMAND = '/cancel'
-    FORMAT_TYPES = {
-        'With Timestamps': 'timestamp',
-        'Plain Text': 'plain'
-    }
+    CANCEL_KEYWORD = '/cancel'
     
     def __init__(self):
         self.states = {}
 
     async def handle_ytb2transcript_command(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Initiate transcript generation flow."""
-        keyboard = [[self.CANCEL_COMMAND]]
+        keyboard = [[self.CANCEL_KEYWORD]]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         await update.message.reply_text(
             "📝 Please send the YouTube video URL.\n"
-            f"Send {self.CANCEL_COMMAND} at any time to stop the process.",
+            "Send /cancel at any time to stop the process.",
             reply_markup=reply_markup
         )
         context.chat_data['transcript_state'] = 'awaiting_url'
@@ -34,8 +30,8 @@ class YouTubeTranscriptHandler:
         """Handle multi-step transcript generation process."""
         user_input = update.message.text
 
-        # Handle cancel command first, before any other processing
-        if user_input.lower() == self.CANCEL_COMMAND.lower():
+        # Check for cancellation request
+        if user_input.lower() == self.CANCEL_KEYWORD:
             await self._cancel_operation(update, context)
             return
 
@@ -60,51 +56,65 @@ class YouTubeTranscriptHandler:
 
     async def _cancel_operation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Cancel the current operation and clean up."""
-        context.chat_data.clear()  # Clear all chat data
+        context.chat_data.clear()
         await update.message.reply_text(
             "✅ Operation cancelled. You can start again with /ytb2transcript",
             reply_markup=ReplyKeyboardRemove()
         )
 
+    async def _handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE, error_message: str) -> None:
+        """Handle errors and provide user feedback."""
+        keyboard = [[self.CANCEL_KEYWORD, "/ytb2transcript"]]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            f"❌ Error: {error_message}\n"
+            "You can:\n"
+            "• Press /cancel to stop\n"
+            "• Press /ytb2transcript to start over\n"
+            "• Try again with different input",
+            reply_markup=reply_markup
+        )
+
     async def _process_url_input(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Process YouTube URL and check available languages."""
+        """Extract video ID and available languages from URL."""
         url = update.message.text
         video_id = self._get_video_id(url)
         
         if not video_id:
-            await self._handle_error(update, context, "Invalid YouTube URL. Please provide a valid URL.")
+            await self._handle_error(
+                update, 
+                context,
+                "Invalid YouTube URL. Please send a valid URL or /cancel to stop."
+            )
             return
-            
+
         try:
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            available_langs = [t.language_code for t in transcript_list._manually_created_transcripts.values()]
-            available_langs.extend([t.language_code for t in transcript_list._generated_transcripts.values()])
+            available_langs = [t.language_code for t in transcript_list]
             
             if not available_langs:
-                raise NoTranscriptFound(video_id)
-                
+                raise TranscriptsDisabled("No transcripts available for this video.")
+            
             context.chat_data.update({
                 'video_id': video_id,
                 'available_langs': available_langs,
                 'transcript_state': 'awaiting_language'
             })
             
-            # Create keyboard with available languages and cancel button
-            keyboard = [[lang] for lang in available_langs]
-            keyboard.append([self.CANCEL_COMMAND])
+            lang_list = "\n".join(f"• {lang}" for lang in available_langs)
+            keyboard = [[self.CANCEL_KEYWORD]] + [[lang] for lang in available_langs[:5]]
             reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
             
             await update.message.reply_text(
-                "🌐 Available languages:\n" + 
-                "\n".join([f"• {lang}" for lang in available_langs]) + 
-                "\n\nPlease select a language code from above.",
+                f"🌐 Available languages:\n{lang_list}\n\n"
+                "Please select or type your preferred language code (e.g. 'en', 'de').\n"
+                "Send /cancel to stop.",
                 reply_markup=reply_markup
             )
             
-        except (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable) as e:
-            await self._handle_error(update, context, f"Transcript error: {str(e)}")
-        except Exception as e:
-            await self._handle_error(update, context, f"Error processing URL: {str(e)}")
+        except (TranscriptsDisabled, VideoUnavailable, Exception) as e:
+            await self._handle_error(update, context, str(e))
 
     async def _process_language_input(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle language selection and prompt for format."""
@@ -124,35 +134,32 @@ class YouTubeTranscriptHandler:
             'transcript_state': 'awaiting_format'
         })
         
-        # Create keyboard with format names
-        keyboard = [[format_name] for format_name in self.FORMAT_TYPES.keys()]
-        keyboard.append([self.CANCEL_COMMAND])
+        keyboard = [
+            ['1', '2'],
+            [self.CANCEL_KEYWORD]
+        ]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         
         await update.message.reply_text(
-            "📝 Choose transcript format:",
+            "📝 Choose transcript format:\n"
+            "1. With timestamps\n"
+            "2. Plain text only\n\n"
+            "Reply with '1' or '2', or send /cancel to stop.",
             reply_markup=reply_markup
         )
 
     async def _process_format_input(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Generate and send transcript based on user preferences."""
-        format_choice = update.message.text
-        
-        # Check if the input matches any of our format types
-        format_type = None
-        for display_name, internal_name in self.FORMAT_TYPES.items():
-            if format_choice == display_name:
-                format_type = internal_name
-                break
-                
-        if not format_type:
+        choice = update.message.text
+        if choice not in ['1', '2']:
             await self._handle_error(
                 update,
                 context,
-                "Invalid format choice. Please select from the available options."
+                "Invalid choice. Please reply with '1' or '2'."
             )
             return
             
+        format_type = 'timestamp' if choice == '1' else 'plain'
         video_id = context.chat_data['video_id']
         lang = context.chat_data['language']
         
@@ -174,30 +181,21 @@ class YouTubeTranscriptHandler:
         except Exception as e:
             await self._handle_error(update, context, f"Error generating transcript: {str(e)}")
         finally:
-            context.chat_data.clear()
-
-    async def _handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE, error_message: str) -> None:
-        """Handle errors and clean up context if necessary."""
-        context.chat_data.clear()  # Clear chat data on error
-        await update.message.reply_text(
-            f"❌ {error_message}\nPlease try again with /ytb2transcript",
-            reply_markup=ReplyKeyboardRemove()
-        )
+            context.chat_data.clear()  # Clean up the context data
 
     def _get_video_id(self, url: str) -> Optional[str]:
         """Extract video ID from various YouTube URL formats."""
-        try:
-            parsed = urlparse(url)
-            if parsed.netloc == 'youtu.be':
-                return parsed.path[1:]
-            if parsed.netloc in ('www.youtube.com', 'youtube.com'):
-                if parsed.path == '/watch':
-                    return parse_qs(parsed.query).get('v', [None])[0]
-                if parsed.path.startswith(('/embed/', '/v/')):
-                    return parsed.path.split('/')[2]
-            return None
-        except Exception:
-            return None
+        parsed = urlparse(url)
+        if parsed.netloc == 'youtu.be':
+            return parsed.path[1:]
+        if parsed.netloc in ('www.youtube.com', 'youtube.com'):
+            if parsed.path == '/watch':
+                return parse_qs(parsed.query).get('v', [None])[0]
+            if parsed.path.startswith('/embed/'):
+                return parsed.path.split('/')[2]
+            if parsed.path.startswith('/v/'):
+                return parsed.path.split('/')[2]
+        return None
 
     async def _get_video_title(self, video_id: str) -> str:
         """Fetch video title using oEmbed API."""
@@ -206,11 +204,12 @@ class YouTubeTranscriptHandler:
                 f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}",
                 timeout=10
             )
-            response.raise_for_status()
+            response.raise_for_status()  # Will raise an exception for bad status codes
             return response.json()['title']
         except Exception as e:
-            print(f"Error fetching video title: {str(e)}")
-            return f"YouTube Video {video_id}"
+            print(f"Error fetching video title: {str(e)}")  # Added error logging
+            return f"YouTube Video {video_id}"  # More informative default title
+
 
     def _format_transcript(self, transcript: list, format_type: str, video_id: str, lang: str, title: str) -> str:
         """Format transcript with metadata and chosen format."""

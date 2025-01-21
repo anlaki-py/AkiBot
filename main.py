@@ -79,6 +79,7 @@ To add new features:
 """
 
 import os
+import io
 import json
 import tempfile
 import uuid

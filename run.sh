@@ -41,7 +41,7 @@ if [ -n "$BASH_VERSION" ]; then
 fi
 
 # Constants and Configuration
-readonly VERSION="1.0.4"
+readonly VERSION="1.0.6"
 readonly CONFIG_DIR="config"
 readonly CONFIG_FILE="$CONFIG_DIR/config.json"
 readonly LOG_DIR="logs"
