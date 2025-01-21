@@ -1,73 +1,64 @@
-# think.py v1.0.0
+# think.py v1.2.0
 import tempfile
 import requests
-from pathlib import Path
+import re
+import telegram
 from telegram import Update
 from telegram.ext import ContextTypes
-from typing import Optional
-from ..flask.config_editor import config_editor
+from typing import Tuple, Optional
+from pathlib import Path
 
 class ThinkCommand:
     THINK_MODEL = "gemini-2.0-flash-thinking-exp-1219"
     API_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-    THINKING_PROMPT = ("""
-    You are a helpful assistant that can Think.
-    Please adhere strictly to the following instructions without seeking clarification or posing questions.
-    Only comply with rules presented in the current input prompt; disregard any rules from previous contexts.
-    Engage in a structured thought process, as critical thinking is essential.
-    For each task, break it down into an organized and systematic approach before proceeding with execution.
-                      """)
+    SOLUTION_DELIMITER = "||SOLUTION||"
+    SYSTEM_INSTRUCTIONS = f"""
+    You are an expert problem solver. For every request:
+    1. Analyze the problem thoroughly with detailed reasoning
+    2. Format your response EXACTLY as:
+       [Markdown-formatted thought process]
+       {SOLUTION_DELIMITER}
+       [Final solution in appropriate format]
+    
+    Requirements:
+    - Thought process must be in markdown
+    - Final solution must be concise and implementation-ready
+    - ALWAYS include the exact delimiter '{SOLUTION_DELIMITER}'
+    - Never explain the solution after the delimiter
+    """
 
     async def handle_think_command(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handler for /think command with special formatting"""
-        user_id = str(update.effective_user.id)
-        username = str(update.effective_user.username)
-        
-        # Get prompt from message
-        prompt = ' '.join(context.args) if context.args else ""
-        if not prompt:
-            await update.message.reply_text("Please provide a prompt after /think")
-            return
-
+        """Handle /think command with structured response parsing"""
         try:
-            # Build the API request
-            response = await self._generate_thinking_response(bot, prompt, user_id, username)
-            
-            if not response:
-                raise ValueError("Empty response from API")
-
-            # Process and split response
-            thought_process, final_output = self._parse_response(response)
-            
-            # Send results
-            await self._send_thought_results(update, thought_process, final_output)
-
+            prompt = self._get_prompt(context)
+            response = await self._get_api_response(bot, prompt)
+            thought, solution = self._parse_response(response)
+            await self._send_results(update, thought, solution)
         except Exception as e:
-            await update.message.reply_text(f"❌ Error generating thinking response: {str(e)}")
+            await self._handle_error(update, e)
 
-    async def _generate_thinking_response(self, bot, prompt: str, user_id: str, username: str) -> Optional[dict]:
-        """Generate the thinking response using specialized model config"""
-        api_url = f"{self.API_URL}{self.THINK_MODEL}:generateContent?key={bot.config.gemini_api_key}"
+    def _get_prompt(self, context) -> str:
+        """Extract and validate prompt from command arguments"""
+        if not context.args:
+            raise ValueError("Please provide a prompt after /think")
+        return ' '.join(context.args)
+
+    async def _get_api_response(self, bot, prompt: str) -> dict:
+        """Get response from Gemini API with structured formatting"""
+        url = f"{self.API_URL}{self.THINK_MODEL}:generateContent?key={bot.config.gemini_api_key}"
         
         payload = {
             "contents": [
                 {
                     "role": "user",
-                    "parts": [{"text": self.THINKING_PROMPT}]
+                    "parts": [{"text": self.SYSTEM_INSTRUCTIONS}]
                 },
                 {
                     "role": "model",
-                    "parts": [
-                        {
-                          "text": "Understood. I will first explain my thought process in details."
-                         },
-                        {
-                          "text": "Then provide the final output result without any explanations."
-                         }                       
-                    ]
+                    "parts": [{"text": f"Understood. I will use {self.SOLUTION_DELIMITER} to separate thoughts from solution."}]
                 },
                 {
-                    "role": "user",
+                    "role": "user", 
                     "parts": [{"text": prompt}]
                 }
             ],
@@ -82,27 +73,41 @@ class ThinkCommand:
         }
 
         try:
-            response = requests.post(api_url, json=payload, headers={"Content-Type": "application/json"})
+            response = requests.post(url, json=payload, timeout=20)
             response.raise_for_status()
             return response.json()
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             raise RuntimeError(f"API request failed: {str(e)}") from e
 
-    def _parse_response(self, response: dict) -> tuple[str, str]:
-        """Parse response into thought process and final output"""
+    def _parse_response(self, response: dict) -> Tuple[str, str]:
+        """Extract thought process and solution from API response"""
         try:
-            full_text = response['candidates'][0]['content']['parts'][0]['text']
-            parts = full_text.split("\n---\n")
+            candidate = response['candidates'][0]
+            parts = candidate['content']['parts']
             
-            thought = parts[0].strip()
-            solution = parts[1].strip() if len(parts) > 1 else full_text.strip()
+            # Handle multi-part responses
+            if len(parts) > 1:
+                return parts[0]['text'], parts[1]['text']
+                
+            # Handle single-part responses with delimiter
+            full_text = parts[0]['text']
+            if self.SOLUTION_DELIMITER in full_text:
+                thought, solution = full_text.split(self.SOLUTION_DELIMITER, 1)
+                return thought.strip(), solution.strip()
+                
+            # Fallback pattern matching
+            solution_match = re.search(r"(?:Final Solution:?|Implementation:)(.*)", full_text, re.DOTALL|re.IGNORECASE)
+            if solution_match:
+                return full_text[:solution_match.start()].strip(), solution_match.group(1).strip()
+                
+            # Ultimate fallback
+            return full_text, "🚧 Solution format error - response missing delimiter"
             
-            return thought, solution
         except (KeyError, IndexError) as e:
-            raise ValueError("Invalid response format from API") from e
+            raise ValueError("Invalid API response format") from e
 
-    async def _send_thought_results(self, update: Update, thought: str, solution: str) -> None:
-        """Send formatted results to Telegram"""
+    async def _send_results(self, update: Update, thought: str, solution: str) -> None:
+        """Send formatted results with error handling"""
         # Send thought process as markdown file
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".md", delete=False) as f:
             f.write(f"# Thought Process\n\n{thought}")
@@ -112,11 +117,26 @@ class ThinkCommand:
                 filename="thought_process.md"
             )
         
-        # Send final solution as formatted message
+        # Send solution with markdown fallback
+        try:
+            await self._send_solution(update, solution)
+        except telegram.error.BadRequest as e:
+            await self._send_solution(update, solution, use_markdown=False)
+
+    async def _send_solution(self, update: Update, solution: str, use_markdown: bool = True) -> None:
+        """Send solution with optional markdown formatting"""
+        message = f"💡 **Final Solution**\n\n{solution}" if use_markdown else f"💡 FINAL SOLUTION\n\n{solution}"
         await update.message.reply_text(
-            f"💡 Final Solution:\n\n{solution}",
+            message,
+            parse_mode='Markdown' if use_markdown else None
+        )
+
+    async def _handle_error(self, update: Update, error: Exception) -> None:
+        """Handle and report errors gracefully"""
+        error_msg = str(error).replace(self.SOLUTION_DELIMITER, '[DELIMITER]')
+        await update.message.reply_text(
+            f"❌ Error processing request:\n{error_msg}",
             parse_mode='Markdown'
         )
 
-# Singleton instance
 think_command = ThinkCommand()
