@@ -1,0 +1,5 @@
+add a memory system when ai can remember certain messages when i reacted to them with 👍 emoji 
+the memory should stay even if the context is cleared. 
+to clear the memory yo need to type /clear memory this will delete all the memories but if you want to delete certain memories you need to edit the memories json file using the manually or using the config editor web app
+# ==============================================================================================================
+improve the directory structure by putting everything relevant to a certain user in data/users/<username>/
