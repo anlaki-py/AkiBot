@@ -1,233 +1,149 @@
+# ytb2transcript.py v1.0.0
 import re
 import os
-import asyncio
-from typing import Dict, Optional
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
-import requests
 from urllib.parse import urlparse, parse_qs
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ContextTypes,
-    ConversationHandler,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    CallbackQueryHandler
-)
-
-# Conversation states
-LINK, LANGUAGE, FORMAT, CONFIRM = range(4)
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
+from telegram import Update, InputFile
+from telegram.ext import ContextTypes
+from typing import Optional, Dict, Any
 
 class YouTubeTranscriptHandler:
     def __init__(self):
-        self.sessions: Dict[int, dict] = {}
-        
-    def get_video_id(self, url: str) -> Optional[str]:
-        """Extract video ID from YouTube URL."""
-        parsed_url = urlparse(url)
-        if parsed_url.netloc == 'youtu.be':
-            return parsed_url.path.strip('/')
-        if parsed_url.netloc in ['www.youtube.com', 'youtube.com']:
-            if parsed_url.path == '/watch':
-                return parse_qs(parsed_url.query).get('v', [None])[0]
-            if parsed_url.path.startswith('/embed/'):
-                return parsed_url.path.split('/')[2]
-            if parsed_url.path.startswith('/v/'):
-                return parsed_url.path.split('/')[2]
-        return None
+        self.states = {}
 
-    def get_video_title(self, video_id: str) -> str:
-        """Fetch video title using web scraping."""
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        try:
-            response = requests.get(url, timeout=10)
-            title_match = re.search(r'<title>(.*?)</title>', response.text)
-            return title_match.group(1).replace(' - YouTube', '').strip() if title_match else "Untitled Video"
-        except Exception:
-            return "Untitled Video"
+    async def handle_ytb2transcript_command(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Initiate transcript generation flow."""
+        await update.message.reply_text("📝 Please send the YouTube video URL.")
+        context.chat_data['transcript_state'] = 'awaiting_url'
 
-    async def start_transcript_process(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Start the transcript conversation."""
+    async def process_transcript_steps(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle multi-step transcript generation process."""
         user_id = update.effective_user.id
-        self.sessions[user_id] = {'stage': LINK}
+        state = context.chat_data.get('transcript_state')
+
+        if state == 'awaiting_url':
+            await self._process_url_input(bot, update, context)
+        elif state == 'awaiting_language':
+            await self._process_language_input(bot, update, context)
+        elif state == 'awaiting_format':
+            await self._process_format_input(bot, update, context)
+
+    async def _process_url_input(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Extract video ID and available languages from URL."""
+        url = update.message.text
+        video_id = self._get_video_id(url)
         
-        await update.message.reply_text(
-            "🎥 Please send me a YouTube video link to generate transcript:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
-            ])
-        )
-        return LINK
-
-    async def handle_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Handle YouTube link input."""
-        user_id = update.effective_user.id
-        url = update.message.text.strip()
-        video_id = self.get_video_id(url)
-
         if not video_id:
-            await update.message.reply_text("❌ Invalid YouTube URL. Please try again:")
-            return LINK
+            await update.message.reply_text("❌ Invalid YouTube URL. Please send a valid URL.")
+            return
 
         try:
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        except (TranscriptsDisabled, VideoUnavailable):
-            await update.message.reply_text("❌ Transcripts not available for this video.")
-            return ConversationHandler.END
-
-        session_data = {
-            'video_id': video_id,
-            'available_langs': [t.language_code for t in transcript_list],
-            'video_title': self.get_video_title(video_id)
-        }
-        self.sessions[user_id] = session_data
-
-        keyboard = [
-            [InlineKeyboardButton(lang, callback_data=f"lang_{lang}")]
-            for lang in session_data['available_langs']
-        ]
-        keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel")])
-
-        await update.message.reply_text(
-            f"🌐 Available languages for '{session_data['video_title']}':\n"
-            f"{', '.join(session_data['available_langs'])}\n\n"
-            "Please choose a language:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        return LANGUAGE
-
-    async def handle_language(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Handle language selection."""
-        query = update.callback_query
-        await query.answer()
-        user_id = query.from_user.id
-        lang = query.data.split('_')[1]
-
-        self.sessions[user_id]['language'] = lang
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("With Timestamps ⏱️", callback_data="format_timestamp")],
-            [InlineKeyboardButton("Plain Text 📝", callback_data="format_plain")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
-        ])
-        
-        await query.edit_message_text(
-            "📝 Choose transcript format:",
-            reply_markup=keyboard
-        )
-        return FORMAT
-
-    async def handle_format(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Handle format selection."""
-        query = update.callback_query
-        await query.answer()
-        user_id = query.from_user.id
-        fmt = query.data.split('_')[1]
-
-        self.sessions[user_id]['format'] = fmt
-        
-        transcript_info = (
-            f"Video: {self.sessions[user_id]['video_title']}\n"
-            f"Language: {self.sessions[user_id]['language']}\n"
-            f"Format: {fmt.capitalize()}"
-        )
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Generate Transcript", callback_data="confirm")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
-        ])
-        
-        await query.edit_message_text(
-            f"📄 Confirm settings:\n{transcript_info}",
-            reply_markup=keyboard
-        )
-        return CONFIRM
-
-    async def generate_transcript(self, user_id: int) -> str:
-        """Generate transcript text with selected settings."""
-        session = self.sessions[user_id]
-        transcript = YouTubeTranscriptApi.get_transcript(
-            session['video_id'],
-            languages=[session['language']]
-        )
-
-        lines = [
-            f"Title: {session['video_title']}",
-            f"Video ID: {session['video_id']}",
-            f"Language: {session['language']}",
-            "\nTranscript:\n"
-        ]
-
-        for entry in transcript:
-            if session['format'] == 'timestamp':
-                time = f"{int(entry['start']//3600):02}:{int(entry['start']%3600//60):02}:{int(entry['start']%60):02}"
-                lines.append(f"{time} - {entry['text']}")
-            else:
-                lines.append(entry['text'])
-
-        return '\n'.join(lines)
-
-    async def handle_confirmation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Handle final confirmation and generate transcript."""
-        query = update.callback_query
-        await query.answer()
-        user_id = query.from_user.id
-
-        if user_id not in self.sessions:
-            await query.edit_message_text("❌ Session expired. Please start over.")
-            return ConversationHandler.END
-
-        try:
-            await query.edit_message_text("⏳ Generating transcript... This may take a moment.")
-            transcript_text = await self.generate_transcript(user_id)
+            available_langs = [t.language_code for t in transcript_list]
             
-            # Send as file if over 4000 characters
-            if len(transcript_text) > 4000:
-                filename = f"{self.sessions[user_id]['video_title'][:50]}.txt"
-                await context.bot.send_document(
-                    chat_id=query.message.chat_id,
-                    document=transcript_text.encode('utf-8'),
-                    filename=filename,
-                    caption="Here's your transcript 📄"
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"📄 Transcript:\n\n{transcript_text}"
-                )
-                
-        except Exception as e:
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=f"❌ Error generating transcript: {str(e)}"
+            context.chat_data.update({
+                'video_id': video_id,
+                'available_langs': available_langs,
+                'transcript_state': 'awaiting_language'
+            })
+            
+            lang_list = "\n".join(available_langs)
+            await update.message.reply_text(
+                f"🌐 Available languages:\n{lang_list}\n"
+                "Please reply with your preferred language code (e.g. 'en', 'de')."
             )
-        finally:
-            del self.sessions[user_id]
             
-        return ConversationHandler.END
+        except (TranscriptsDisabled, VideoUnavailable) as e:
+            await update.message.reply_text(f"❌ Error: {str(e)}")
+            context.chat_data.pop('transcript_state', None)
 
-    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Cancel the conversation."""
-        user_id = update.effective_user.id
-        if user_id in self.sessions:
-            del self.sessions[user_id]
+    async def _process_language_input(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle language selection and prompt for format."""
+        lang = update.message.text.lower()
+        available_langs = context.chat_data.get('available_langs', [])
+        
+        if lang not in available_langs:
+            await update.message.reply_text("❌ Invalid language code. Please choose from available languages.")
+            return
             
-        await update.message.reply_text("❌ Operation cancelled.") if update.message else None
-        return ConversationHandler.END
-
-    def get_conversation_handler(self) -> ConversationHandler:
-        """Return configured conversation handler."""
-        return ConversationHandler(
-            entry_points=[CommandHandler('ytb2transcript', self.start_transcript_process)],
-            states={
-                LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_link)],
-                LANGUAGE: [CallbackQueryHandler(self.handle_language, pattern=r'^lang_')],
-                FORMAT: [CallbackQueryHandler(self.handle_format, pattern=r'^format_')],
-                CONFIRM: [CallbackQueryHandler(self.handle_confirmation, pattern='^confirm$')]
-            },
-            fallbacks=[
-                CommandHandler('cancel', self.cancel),
-                CallbackQueryHandler(self.cancel, pattern='^cancel$')
-            ],
-            allow_reentry=True
+        context.chat_data.update({
+            'language': lang,
+            'transcript_state': 'awaiting_format'
+        })
+        
+        await update.message.reply_text(
+            "📝 Choose transcript format:\n"
+            "1. With timestamps\n"
+            "2. Plain text only\n"
+            "Reply with '1' or '2'."
         )
+
+    async def _process_format_input(self, bot, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Generate and send transcript based on user preferences."""
+        choice = update.message.text
+        if choice not in ['1', '2']:
+            await update.message.reply_text("❌ Invalid choice. Please reply with '1' or '2'.")
+            return
+            
+        format_type = 'timestamp' if choice == '1' else 'plain'
+        video_id = context.chat_data['video_id']
+        lang = context.chat_data['language']
+        
+        try:
+            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+            title = await self._get_video_title(video_id)
+            file_content = self._format_transcript(transcript, format_type, video_id, lang, title)
+            
+            await update.message.reply_document(
+                document=InputFile(io.StringIO(file_content), filename=f"{title[:50]}_transcript.txt"),
+                caption=f"📄 {title}"
+            )
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error generating transcript: {str(e)}")
+        finally:
+            context.chat_data.pop('transcript_state', None)
+
+    def _get_video_id(self, url: str) -> Optional[str]:
+        """Extract video ID from various YouTube URL formats."""
+        parsed = urlparse(url)
+        if parsed.netloc == 'youtu.be':
+            return parsed.path[1:]
+        if parsed.netloc in ('www.youtube.com', 'youtube.com'):
+            if parsed.path == '/watch':
+                return parse_qs(parsed.query).get('v', [None])[0]
+            if parsed.path.startswith('/embed/'):
+                return parsed.path.split('/')[2]
+            if parsed.path.startswith('/v/'):
+                return parsed.path.split('/')[2]
+        return None
+
+    async def _get_video_title(self, video_id: str) -> str:
+        """Fetch video title using oEmbed API."""
+        try:
+            response = requests.get(f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}")
+            return response.json()['title']
+        except Exception:
+            return "Untitled"
+
+    def _format_transcript(self, transcript: list, format_type: str, video_id: str, lang: str, title: str) -> str:
+        """Format transcript with metadata and chosen format."""
+        header = (
+            f"Video Title: {title}\n"
+            f"Video ID: {video_id}\n"
+            f"Language: {lang}\n\n"
+            "TRANSCRIPT:\n\n"
+        )
+        
+        content = []
+        for entry in transcript:
+            if format_type == 'timestamp':
+                mins, secs = divmod(int(entry['start']), 60)
+                content.append(f"[{mins:02d}:{secs:02d}] {entry['text']}")
+            else:
+                content.append(entry['text'])
+                
+        return header + "\n".join(content)
+
+# Singleton instance for handler
+handler = YouTubeTranscriptHandler()
