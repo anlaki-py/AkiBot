@@ -114,12 +114,13 @@ from utils.commands.help import help_command
 from utils.commands.clear import clear_command
 from utils.commands.think import think_command
 
+
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
         self.config_path = config_path
         self._last_modified = 0
         self._config_cache = {}
-
+        
     def _load_config(self) -> None:
         """Load configuration if file has been modified."""
         current_mtime = os.path.getmtime(self.config_path)
@@ -316,8 +317,6 @@ class AIBot:
 
         return wrapper
 
-
-
     def global_user_access(func: Callable) -> Callable:
         """Decorator to check user access permissions."""
 
@@ -334,8 +333,6 @@ class AIBot:
             return await func(self, update, context, *args, **kwargs)
 
         return wrapper
-
-
 
     def get_history_file_path(self, user_id: str, username: str) -> str:
         """Generate the file path for a user's chat history."""
@@ -815,7 +812,7 @@ class AIBot:
             application.add_handler(CommandHandler("instaFile", self.insta_file_command))
             application.add_handler(CommandHandler("ytb2mp3", self.ytb2mp3_command))
             application.add_handler(CommandHandler("web2md", self.web2md_command))
-            application.add_handler(CommandHandler("think", self.think_command))    
+            application.add_handler(CommandHandler("think", self.think_command))             
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
             application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL | filters.AUDIO | filters.VOICE, self.handle_media)); print(f"\nBot is running...\n")      
             application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)

@@ -1,4 +1,4 @@
-# think.py v1.5.0
+# think.py v1.6.0
 import tempfile
 import requests
 import json
@@ -91,20 +91,31 @@ class ThinkCommand:
         await self._send_full_response_md(bot, update, raw_response, thought, solution)
 
     async def _send_solution_message(self, bot, update: Update, solution: str) -> None:
-        """Send solution as plain text message"""
-        if len(solution) > 4096:
-            chunks = [solution[i:i+4096] for i in range(0, len(solution), 4096)]
-            for chunk in chunks:
+        """Send solution as plain text message with safe chunking"""
+        BASE_PREFIX = "💡 Solution Part X:\n"  # Template for length calculation
+        MAX_PREFIX_LENGTH = len(BASE_PREFIX) + 3  # Reserve space for 999 parts
+        CHUNK_SIZE = 4096 - MAX_PREFIX_LENGTH  # Actual content space available
+    
+        if len(solution) > CHUNK_SIZE:
+            chunks = [solution[i:i+CHUNK_SIZE] for i in range(0, len(solution), CHUNK_SIZE)]
+            for i, chunk in enumerate(chunks, 1):
+                prefix = f"💡 Solution Part {i}:\n"
+                message = prefix + chunk
+                
+                # Final safety check
+                if len(message) > 4096:
+                    message = message[:4096]
+                
                 await bot.retry_operation(
                     update.message.reply_text,
-                    f"💡 Solution Part:\n{chunk}"
+                    message
                 )
         else:
             await bot.retry_operation(
                 update.message.reply_text,
                 f"💡 Solution:\n{solution}"
             )
-
+        
     async def _send_text_file(self, bot, update: Update, content: str, filename: str) -> None:
         """Send text content as a file"""
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as f:
@@ -117,51 +128,18 @@ class ThinkCommand:
             )
 
     async def _send_full_response_md(self, bot, update: Update, raw_response: dict, thought: str, solution: str) -> None:
-        """Create and send comprehensive markdown file with chunking"""
+        """Create and send comprehensive markdown file"""
         md_content = self._generate_md_content(raw_response, thought, solution)
         
-        # Split content into chunks that preserve markdown structure
-        chunks = self._split_md_content(md_content)
-        
-        for i, chunk in enumerate(chunks, 1):
-            with tempfile.NamedTemporaryFile(mode="w+", suffix=".md", delete=False) as f:
-                f.write(chunk)
-                f.seek(0)
-                await bot.retry_operation(
-                    update.message.reply_document,
-                    document=open(f.name, 'rb'),
-                    filename=f"full_response_part_{i}.md"
-                )
-    
-    def _split_md_content(self, content: str, chunk_size: int = 4000) -> list:
-        """Split markdown content into chunks while preserving structure"""
-        chunks = []
-        current_chunk = []
-        current_length = 0
-        code_block = False
-    
-        for line in content.split('\n'):
-            line_length = len(line) + 1  # +1 for newline character
-            
-            # Track code block state
-            if line.strip().startswith("```"):
-                code_block = not code_block
-                
-            # Start new chunk if adding this line would exceed limit
-            if current_length + line_length > chunk_size and not code_block:
-                chunks.append('\n'.join(current_chunk))
-                current_chunk = [line]
-                current_length = line_length
-            else:
-                current_chunk.append(line)
-                current_length += line_length
-    
-        # Add remaining content
-        if current_chunk:
-            chunks.append('\n'.join(current_chunk))
-    
-        return chunks
-        
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            f.seek(0)
+            await bot.retry_operation(
+                update.message.reply_document,
+                document=open(f.name, 'rb'),
+                filename="full_response.md"
+            )
+
     def _generate_md_content(self, raw_response: dict, thought: str, solution: str) -> str:
         """Generate formatted markdown content"""
         # Extract metadata

@@ -10,3 +10,4 @@ telegram
 flask
 pytelegrambotapi
 aiohttp
+youtube_transcript_api
