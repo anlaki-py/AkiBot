@@ -117,7 +117,21 @@ from utils.commands.help import help_command
 from utils.commands.clear import clear_command
 from utils.commands.think import think_command
 from utils.commands.ytb2transcript import handler as transcript_handler
+from telegram.helpers import escape_markdown
 
+def custom_markdown_escape(text: str) -> str:
+    """Escape MarkdownV2 special characters while preserving quote blocks"""
+    lines = text.split('\n')
+    escaped_lines = []
+    for line in lines:
+        if line.startswith('>'):
+            escaped_line = '>' + escape_markdown(line[1:], version=2)
+            escaped_lines.append(escaped_line)
+        else:
+            escaped_line = escape_markdown(line, version=2)
+            escaped_lines.append(escaped_line)
+    return '\n'.join(escaped_lines)
+    
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
         self.config_path = config_path
@@ -677,20 +691,21 @@ class AIBot:
                     )
                     sent_messages.append(sent_msg)
             else:
+                # Modified message sending with MarkdownV2
                 sent_msg = await self.retry_operation(
                     update.message.reply_text,
-                    text,
-                    reply_to_message_id=reply_to_message_id,
-                    reply_markup=keyboard
+                    chunk,
+                    reply_to_message_id=reply_to_message_id if i == 0 else None,
+                    parse_mode=ParseMode.MARKDOWN_V2,  # Added parse mode
+                    reply_markup=chunk_keyboard
                 )
-                sent_messages.append(sent_msg)
-            
-            # Store message data in context
-            context.chat_data['message_cache'][callback_data] = {
-                'text': text,
-                'messages': [msg.message_id for msg in sent_messages],
-                'markdown_mode': False
-            }
+                
+                # Store original text and markdown state
+                context.chat_data['message_cache'][callback_data] = {
+                    'text': text,  # Store original unescaped text
+                    'messages': [msg.message_id for msg in sent_messages],
+                    'markdown_mode': True  # Start in Markdown mode
+                }
             
             return sent_messages
             
@@ -737,8 +752,11 @@ class AIBot:
                 stream=False
             )
             
-            text_response = await self.handle_gemini_response(response)                        
-            await chat.send_message_async(f"{text_response}", role="assistant")
+            # In handle_text:
+            text_response = await self.handle_gemini_response(response)
+            escaped_response = custom_markdown_escape(text_response)
+            await self.send_response_with_toggle(update, context, escaped_response)
+            
             await self.save_chat_history(user_id, username)
             
             # Use the new utility method to send the response
@@ -788,8 +806,8 @@ class AIBot:
                 result = "Unsupported media type"
     
             # Use the new utility method to send the response
-            await self.send_response_with_toggle(update, context, result)
-                
+            await self.send_response_with_toggle(update, context, custom_markdown_escape(result))
+
         except Exception as e:
             error_message = f"Error handling media: {str(e)}"
             await self.send_response_with_toggle(update, context, error_message)
@@ -815,9 +833,22 @@ class AIBot:
             text = message_data['text']
             message_ids = message_data['messages']
     
-            # Toggle Markdown mode
+            # Toggle between Markdown and plain text
             new_mode = not current_mode
             button_text = "Show Plain Text" if new_mode else "Render Markdown"
+        
+            # Escape/unescape based on mode
+            display_text = custom_markdown_escape(message_data['text']) if new_mode else message_data['text']
+            
+            # Edit messages with proper formatting
+            for i, (chunk, msg_id) in enumerate(zip(chunks, message_ids)):
+                await context.bot.edit_message_text(
+                    chat_id=query.message.chat_id,
+                    message_id=msg_id,
+                    text=chunk,
+                    parse_mode=ParseMode.MARKDOWN_V2 if new_mode else None,
+                    reply_markup=keyboard if i == len(message_ids)-1 else None
+                )
             
             # Prepare new keyboard
             keyboard = InlineKeyboardMarkup([[
@@ -869,6 +900,21 @@ class AIBot:
             except:
                 pass
             print(f"Error in toggle_markdown_callback: {str(e)}")                
+
+        try:
+            await context.bot.edit_message_text(...)
+        except telegram.error.BadRequest as e:
+            if "Can't parse entities" in str(e):
+                await context.bot.edit_message_text(
+                    chat_id=query.message.chat_id,
+                    message_id=msg_id,
+                    text=f"⚠️ Invalid Markdown:\n\n{custom_markdown_escape(chunk)}",
+                    parse_mode=None
+                )
+        
+
+
+
 
     async def count_tokens(self, contents):
         """Count tokens in the content to manage context window."""

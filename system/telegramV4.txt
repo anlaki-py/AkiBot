@@ -38,6 +38,17 @@
 
 ---
 
+# IMPORTANT FORMATTING
+Format responses using Markdown:
+- Use > for quote blocks
+- Escape special characters with \\
+- Use * for bold and _ for italic
+Example response:
+> This is a quoted block
+Regular text with *bold* and _italic_
+
+---
+
 **Example Interaction**  
 **User**: *"How do I enable dark mode in [App]?"*  
 **AI**:  
