@@ -660,55 +660,52 @@ class AIBot:
     async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                       text: str, reply_to_message_id: int = None) -> None:
         try:
-            # Initialize message cache if not exists
             if 'message_cache' not in context.chat_data:
                 context.chat_data['message_cache'] = {}
                 
-            # Generate unique callback data
             callback_data = f"toggle_md_{uuid.uuid4()}"
-            
-            # Create keyboard with toggle button
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("Render Markdown", callback_data=callback_data)
             ]])
             
             sent_messages = []
             
-            # Handle messages longer than 4096 characters
             if len(text) > 4096:
                 chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
                 
                 for i, chunk in enumerate(chunks):
                     chunk_keyboard = None
-                    if i == len(chunks) - 1:  # Only add button to last chunk
+                    if i == len(chunks) - 1:
                         chunk_keyboard = keyboard
                     
                     sent_msg = await self.retry_operation(
                         update.message.reply_text,
                         chunk,
                         reply_to_message_id=reply_to_message_id if i == 0 else None,
+                        parse_mode=ParseMode.MARKDOWN_V2,
                         reply_markup=chunk_keyboard
                     )
                     sent_messages.append(sent_msg)
             else:
-                # Modified message sending with MarkdownV2
+                # Fixed section: Use text instead of chunk
                 sent_msg = await self.retry_operation(
                     update.message.reply_text,
-                    chunk,
-                    reply_to_message_id=reply_to_message_id if i == 0 else None,
-                    parse_mode=ParseMode.MARKDOWN_V2,  # Added parse mode
-                    reply_markup=chunk_keyboard
+                    text,  # Changed from chunk to text
+                    reply_to_message_id=reply_to_message_id,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=keyboard
                 )
-                
-                # Store original text and markdown state
-                context.chat_data['message_cache'][callback_data] = {
-                    'text': text,  # Store original unescaped text
-                    'messages': [msg.message_id for msg in sent_messages],
-                    'markdown_mode': True  # Start in Markdown mode
-                }
+                sent_messages.append(sent_msg)
+    
+            # Moved outside of if/else blocks
+            context.chat_data['message_cache'][callback_data] = {
+                'text': text,
+                'messages': [msg.message_id for msg in sent_messages],
+                'markdown_mode': True
+            }
             
             return sent_messages
-            
+                
         except Exception as e:
             error_message = f"Error sending message: {str(e)}"
             await self.retry_operation(
@@ -840,15 +837,7 @@ class AIBot:
             # Escape/unescape based on mode
             display_text = custom_markdown_escape(message_data['text']) if new_mode else message_data['text']
             
-            # Edit messages with proper formatting
-            for i, (chunk, msg_id) in enumerate(zip(chunks, message_ids)):
-                await context.bot.edit_message_text(
-                    chat_id=query.message.chat_id,
-                    message_id=msg_id,
-                    text=chunk,
-                    parse_mode=ParseMode.MARKDOWN_V2 if new_mode else None,
-                    reply_markup=keyboard if i == len(message_ids)-1 else None
-                )
+
             
             # Prepare new keyboard
             keyboard = InlineKeyboardMarkup([[
@@ -874,22 +863,34 @@ class AIBot:
                             text=chunk,
                             reply_markup=keyboard if i == len(message_ids) - 1 else None
                         )
+                   
                 except telegram.error.BadRequest as e:
-                    if "can't parse entities" in str(e).lower():
-                        # Markdown parsing failed, revert to plain text
+                    if "Can't parse entities" in str(e):
                         await context.bot.edit_message_text(
                             chat_id=query.message.chat_id,
                             message_id=msg_id,
-                            text=f"⚠️ Markdown rendering failed. Some syntax might be invalid:\n\n{chunk}",
-                            reply_markup=keyboard if i == len(message_ids) - 1 else None
+                            text=f"⚠️ Invalid Markdown:\n\n{custom_markdown_escape(chunk)}",
+                            parse_mode=None
                         )
                     else:
                         raise
-    
+            
+            
+            # Edit messages with proper formatting
+            for i, (chunk, msg_id) in enumerate(zip(chunks, message_ids)):
+                await context.bot.edit_message_text(
+                    chat_id=query.message.chat_id,
+                    message_id=msg_id,
+                    text=chunk,
+                    parse_mode=ParseMode.MARKDOWN_V2 if new_mode else None,
+                    reply_markup=keyboard if i == len(message_ids)-1 else None
+                )            
+            
+            
             # Update cache
             message_data['markdown_mode'] = new_mode
             context.chat_data['message_cache'][cache_key] = message_data
-    
+            
         except Exception as e:
             try:
                 await query.edit_message_reply_markup(
@@ -901,16 +902,6 @@ class AIBot:
                 pass
             print(f"Error in toggle_markdown_callback: {str(e)}")                
 
-        try:
-            await context.bot.edit_message_text(...)
-        except telegram.error.BadRequest as e:
-            if "Can't parse entities" in str(e):
-                await context.bot.edit_message_text(
-                    chat_id=query.message.chat_id,
-                    message_id=msg_id,
-                    text=f"⚠️ Invalid Markdown:\n\n{custom_markdown_escape(chunk)}",
-                    parse_mode=None
-                )
         
 
 
