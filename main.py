@@ -91,6 +91,7 @@ import base64
 import requests
 import re
 import telegram
+from telegram.constants import ParseMode
 from telegram import Update, Message, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -642,12 +643,6 @@ class AIBot:
                 f"USER'S REPLY: {current_message}"
             )
        
-
-
-
-
-
-
     async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                       text: str, reply_to_message_id: int = None) -> None:
         try:
@@ -798,13 +793,6 @@ class AIBot:
         except Exception as e:
             error_message = f"Error handling media: {str(e)}"
             await self.send_response_with_toggle(update, context, error_message)
-            
-
-
-
-
-
-
     
     async def toggle_markdown_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the Markdown toggle button callback."""
@@ -839,13 +827,13 @@ class AIBot:
             # Update all messages in the chain
             chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
             for i, (chunk, msg_id) in enumerate(zip(chunks, message_ids)):
-                try:
+                try:                    
                     if new_mode:
                         await context.bot.edit_message_text(
                             chat_id=query.message.chat_id,
                             message_id=msg_id,
                             text=chunk,
-                            parse_mode='Markdown',
+                            parse_mode=ParseMode.MARKDOWN,
                             reply_markup=keyboard if i == len(message_ids) - 1 else None
                         )
                     else:
@@ -945,165 +933,3 @@ if __name__ == "__main__":
     config_editor()
     bot = AIBot()
     bot.run()
-
-
-
-
-"""
-
-
-
-
-    async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                      text: str, reply_to_message_id: int = None) -> None:
-        try:
-            # Initialize message cache if not exists
-            if 'message_cache' not in context.chat_data:
-                context.chat_data['message_cache'] = {}
-                
-            # Generate unique callback data
-            callback_data = f"toggle_md_{uuid.uuid4()}"
-            
-            # Create keyboard with toggle button
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("Render Markdown", callback_data=callback_data)
-            ]])
-            
-            sent_messages = []
-            
-            # Handle messages longer than 4096 characters
-            if len(text) > 4096:
-                chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
-                
-                for i, chunk in enumerate(chunks):
-                    chunk_keyboard = None
-                    if i == len(chunks) - 1:  # Only add button to last chunk
-                        chunk_keyboard = keyboard
-                    
-                    sent_msg = await self.retry_operation(
-                        update.message.reply_text,
-                        chunk,
-                        reply_to_message_id=reply_to_message_id if i == 0 else None,
-                        reply_markup=chunk_keyboard
-                    )
-                    sent_messages.append(sent_msg)
-            else:
-                sent_msg = await self.retry_operation(
-                    update.message.reply_text,
-                    text,
-                    reply_to_message_id=reply_to_message_id,
-                    reply_markup=keyboard
-                )
-                sent_messages.append(sent_msg)
-            
-            # Store message data in context
-            context.chat_data['message_cache'][callback_data] = {
-                'text': text,
-                'messages': [msg.message_id for msg in sent_messages],
-                'markdown_mode': False
-            }
-            
-            return sent_messages
-            
-        except Exception as e:
-            error_message = f"Error sending message: {str(e)}"
-            await self.retry_operation(
-                update.message.reply_text,
-                error_message,
-                reply_to_message_id=reply_to_message_id
-            )
-            return None
-    
-    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    
-        user_id = str(update.effective_user.id)
-        username = str(update.effective_user.username)
-        await self.initialize_chat(user_id, username)
-    
-        text = update.message.text
-        
-        if 'transcript_state' in context.chat_data:
-            await transcript_handler.process_transcript_steps(self, update, context)
-            return        
-        
-        try:
-            chat = self.chat_history[user_id]
-            
-            try:
-                reply_info = await self.get_replied_message_content(update.message)
-            except ValueError as ve:
-                await self.send_response_with_toggle(update, context, "Cannot reply to voice or audio messages")
-                return
-                
-            if reply_info:
-                formatted_context = self.format_reply_context(reply_info, text)
-                await chat.send_message_async(formatted_context, role="user")
-            else:
-                await chat.send_message_async(f"user: {text}", role="user")
-            
-            response = await self.retry_operation(
-                self.generate_content,
-                chat.history,
-                stream=False
-            )
-            
-            text_response = await self.handle_gemini_response(response)                        
-            await chat.send_message_async(f"{text_response}", role="assistant")
-            await self.save_chat_history(user_id, username)
-            
-            # Use the new utility method to send the response
-            await self.send_response_with_toggle(update, context, text_response)
-                
-        except Exception as e:
-            error_message = f"An error occurred: {str(e)}"
-            await self.send_response_with_toggle(update, context, error_message)
-    
-    async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    
-        user_id = str(update.effective_user.id)
-        username = str(update.effective_user.username)
-        await self.initialize_chat(user_id, username)
-    
-        try:
-            if not (update.message.voice or update.message.audio):
-                reply_info = await self.get_replied_message_content(update.message)
-                
-                if reply_info:
-                    formatted_context = self.format_reply_context(
-                        reply_info,
-                        update.message.caption or "[No caption]"
-                    )
-                    
-                    if isinstance(formatted_context, list):
-                        await self.chat_history[user_id].send_message_async(formatted_context, role="user")
-                    else:
-                        await self.chat_history[user_id].send_message_async(formatted_context, role="user")
-    
-            # Handle different media types
-            if update.message.voice or update.message.audio:
-                file_obj = await self.retry_operation((update.message.voice or update.message.audio).get_file)
-                result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
-            elif update.message.photo:
-                file_obj = await self.retry_operation(update.message.photo[-1].get_file)
-                result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
-            elif update.message.document:
-                file_extension = os.path.splitext(update.message.document.file_name)[1].lower()
-                if file_extension not in self.allowed_extensions:
-                    await self.send_response_with_toggle(update, context, "Unsupported document type.")
-                    return
-                file_obj = await self.retry_operation(update.message.document.get_file)
-                result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
-            else:
-                result = "Unsupported media type"
-    
-            # Use the new utility method to send the response
-            await self.send_response_with_toggle(update, context, result)
-                
-        except Exception as e:
-            error_message = f"Error handling media: {str(e)}"
-            await self.send_response_with_toggle(update, context, error_message)
-            
-            
-            
-            
-"""
