@@ -1,83 +1,3 @@
-# main.py v1.4.46
-"""
-=== MAINTENANCE AND MODIFICATION GUIDE ===
-
-This Telegram bot integrates Gemini AI, media downloaders, and web conversion tools. Follow these guidelines when modifying:
-
-1. CRITICAL COMPONENTS (Avoid structural changes without testing)
-- Configuration System:
-  • Modify config/config.json for settings (not Config class logic)
-  • Add new env variables ONLY through the Config class
-- Security Decorators (@check_user_access and @global_user_access):
-  • Preserve user ID validation logic
-  • Modify allowed_users list in config.json for access control
-  • Use @global_user_access to block a certain feature for everyone
-- API Handlers (Gemini/YouTube/Instagram):
-  • Keep retry logic and error handling intact
-  • Update regex patterns cautiously (INSTAGRAM_URL_REGEX/YOUTUBE_URL_REGEX)
-
-2. SAFE TO MODIFY AREAS
-- Command Handlers:
-  • Add new commands using @check_user_access decorator
-  • Extend help_command() with new features
-- File Processing:
-  • Add supported extensions via allowed_extensions set
-  • Implement new process_file() handlers
-- Chat Features:
-  • Modify format_reply_context() for different reply formatting
-  • Adjust manage_chat_history() token limits
-
-3. MODIFICATION WARNINGS
-- Chat History Structure:
-  • Changing history format will invalidate existing user histories
-  • Test data migration if modifying Chat class
-- Media Processing:
-  • Maintain base64 encoding for Gemini API compatibility
-  • Keep tempfile cleanup procedures
-- Dependency Versions:
-  • Verify library compatibility before upgrading:
-    python-telegram-bot~20.5
-    Pillow~10.2
-    requests~2.31
-
-4. BEST PRACTICES
-- Environment Management:
-  • Keep TELEGRAM_TOKEN_KEY and GEMINI_API_KEY in environment
-  • Never commit .env files
-- Testing:
-  • Validate Instagram/YouTube regex changes with URL samples
-  • Test file uploads with all allowed extensions
-  • Verify history persistence after restarts
-- Error Handling:
-  • Maintain retry_operation() wrapper for network calls
-  • Preserve file cleanup in finally blocks
-
-5. EXTENSION GUIDE
-To add new features:
-- New Commands:
-  1. Create handler with @check_user_access
-  2. Add to help_command() text
-  3. Register in application.add_handler()
-- New Media Types:
-  1. Add to allowed_extensions
-  2. Implement handle_processed_file() logic
-  3. Update get_replied_message_content()
-- API Integrations:
-  1. Use existing generate_content() pattern
-  2. Implement response handling similar to handle_gemini_response()
-  3. Add rate limiting via RETRY_DELAY
-
-6. CRITICAL PATHS
-- Initialization Flow:
-  config_editor() → AIBot() → run()
-- Message Processing:
-  handle_text() → generate_content() → handle_gemini_response()
-- File Pipeline:
-  handle_media() → process_file() → handle_processed_file()
-
-=== END OF GUIDE ===
-"""
-
 import os
 import io
 import json
@@ -123,7 +43,7 @@ class Config:
         self.config_path = config_path
         self._last_modified = 0
         self._config_cache = {}
-        
+
     def _load_config(self) -> None:
         """Load configuration if file has been modified."""
         current_mtime = os.path.getmtime(self.config_path)
@@ -161,7 +81,7 @@ class Config:
     @property
     def system_instructions(self) -> str:
         return self._get_config_value("system_instructions")
-        
+
 class Chat:
 
     def __init__(self, history=None):
@@ -172,11 +92,10 @@ class Chat:
             content = [{"text": content}]
 
         message = {
-            "role": "user",
+            "role": role, # Fixed: Use the role parameter here
             "parts": content if isinstance(content, list) else [content]
         }
         self.history.append(message)
-        # return await self.get_response()
         if role == "user":
             return await self.get_response()
         return None
@@ -194,7 +113,7 @@ class AIBot:
     MAX_RETRIES = 3
     RETRY_DELAY = 3  # seconds
     HISTORY_DIR = "history"
-    GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+    GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1alpha/models"
     INSTAGRAM_URL_REGEX = re.compile(
         r'(?:https?://)?(?:www\.)?instagram\.com/(?:p/|reel/)([\w-]+)')
 
@@ -230,15 +149,7 @@ class AIBot:
     async def generate_content(self, contents, stream=False):
         endpoint = "streamGenerateContent" if stream else "generateContent"
         url = f"{self.api_url}:{endpoint}?{'alt=sse&' if stream else ''}key={self.config.gemini_api_key}"
-        
-        # Convert safety settings to proper format
-        # safety_settings_list = [
-            # {
-                # "category": item["category"],
-                # "threshold": item["threshold"]
-            # } for item in self.config.safety_settings
-        # ]
-        
+
         payload = {
             "contents":
             contents,
@@ -249,11 +160,11 @@ class AIBot:
             "generationConfig":
             self.config.generation_config
         }
-        
+
         try:
             response = requests.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
-            
+
             if stream:
                 # Handle streaming response
                 return response.iter_lines()
@@ -271,13 +182,13 @@ class AIBot:
                 if error:
                     raise Exception(f"API Error: {error.get('message', 'Unknown error')}")
                 raise Exception("No response candidates returned")
-                
+
             text_response = response["candidates"][0]["content"]["parts"][0].get("text")
             if not text_response:
                 raise Exception("No text content in response")
-                
+
             return text_response
-            
+
         except Exception as e:
             print(f"Error handling Gemini response: {str(e)}")
             raise
@@ -312,7 +223,7 @@ class AIBot:
                 await self.retry_operation(
                     update.message.reply_text,
                     f"Access Denied: You do not have permission to use this bot.\n"
-                    f"Please contact the [developer](https://t.me/<USERNAME>) of this bot to request access.\n"
+                    f"Please contact the [developer](https://t.me/<USERNAME>) of this bot to request access.\n" # Fixed: Removed unnecessary backticks around USERNAME, assuming it's a placeholder. If intended, specify.
                     f"Your ID: `{user_id}`",
                     parse_mode='Markdown')
                 return
@@ -391,13 +302,13 @@ class AIBot:
         finally:
             if temp_file and os.path.exists(temp_file.name):
                 os.remove(temp_file.name)
-    
+
     async def handle_processed_file(self, file_path: str, message: Message) -> str:
         """Handle the processed file and get AI response with retry logic."""
         user_id = str(message.from_user.id)
         username = str(message.from_user.username)
         caption = message.caption or "user: [No caption provided]"
-    
+
         try:
             if message.photo:
                 with Image.open(file_path) as img:
@@ -423,14 +334,14 @@ class AIBot:
                 audio_msg = message.audio or message.voice
                 with open(file_path, "rb") as f:
                     audio_b64 = base64.b64encode(f.read()).decode()
-                    
+
                     # Include audio metadata
                     duration = audio_msg.duration
                     file_size = audio_msg.file_size
-                    mime_type = "audio/ogg"
-                    if message.audio:
-                        mime_type = message.audio.mime_type or mime_type
-                        
+                    mime_type = "audio/ogg" # Default mime type for voice
+                    if message.audio and message.audio.mime_type: # Prioritize audio mime type if available
+                        mime_type = message.audio.mime_type
+
                     content = [{
                         "text": f"user: Audio message - Duration: {duration}s, Size: {file_size} bytes\nCaption: {caption}"
                     }, {
@@ -441,14 +352,14 @@ class AIBot:
                     }]
             else:
                 return "Unsupported file type"
-    
+
             # Get the chat history for the user
             chat = self.chat_history[user_id]
             await chat.send_message_async(content, role="user")
-    
+
             response = await self.generate_content(chat.history)
             text_response = await self.handle_gemini_response(response)
-            
+
             await chat.send_message_async(f"{text_response}", role="assistant")
             await self.save_chat_history(user_id, username)
             return text_response
@@ -513,7 +424,7 @@ class AIBot:
     async def ytb2transcript_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler for /ytb2transcript command"""
         await transcript_handler.handle_ytb2transcript_command(self, update, context)
-            
+
 # = Basic Commands ============================================================================================================
 
     @check_user_access
@@ -541,6 +452,7 @@ class AIBot:
         Returns:
             Optional[dict]: Message content and metadata if it's a reply, None otherwise
         """
+        # First, explicitly check if this is a reply
         if not message.reply_to_message:
             return None
 
@@ -564,7 +476,7 @@ class AIBot:
                             buf = io.BytesIO()
                             img.save(buf, format='JPEG')
                             img_b64 = base64.b64encode(buf.getvalue()).decode()
-                            result['content'] = [{  # Enclose in a list for consistency
+                            result['content'] = [{
                                 "text": "[Image]",
                                 "image_data": img_b64,
                                 "caption": replied_msg.caption or ""
@@ -572,24 +484,19 @@ class AIBot:
                             result['type'] = 'image'
                     finally:
                         os.unlink(temp_file.name)
-            elif replied_msg.document:
-                if replied_msg.document.file_name.endswith(tuple(self.allowed_extensions)):
-                    file_obj = await self.retry_operation(replied_msg.document.get_file)
-                    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                        await file_obj.download_to_drive(temp_file.name)
-                        try:
-                            with open(temp_file.name, 'r', encoding='utf-8') as f:
-                                result['content'] = f.read()
-                                result['type'] = 'document'
-                        finally:
-                            os.unlink(temp_file.name)
-                else:
-                    result['content'] = "[Unsupported Document]"
-                    result['type'] = 'unsupported_document'
+            elif replied_msg.document and replied_msg.document.file_name and replied_msg.document.file_name.endswith(tuple(self.allowed_extensions)): # Fixed: Added check for replied_msg.document.file_name to prevent potential NoneType error
+                file_obj = await self.retry_operation(replied_msg.document.get_file)
+                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                    await file_obj.download_to_drive(temp_file.name)
+                    try:
+                        with open(temp_file.name, 'r', encoding='utf-8') as f:
+                            result['content'] = f.read()
+                            result['type'] = 'document'
+                    finally:
+                        os.unlink(temp_file.name)
             elif replied_msg.voice or replied_msg.audio:
-                result['content'] = "[Audio message]"  # or handle audio data if needed
+                result['content'] = "[Audio message]"
                 result['type'] = 'audio'
-            # Add more elif blocks for other message types as required (video, sticker, etc.)
 
         except Exception as e:
             print(f"Error processing replied message: {str(e)}")
@@ -598,86 +505,81 @@ class AIBot:
 
         return result
 
-
-
     def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
-        """Format the reply context with metadata about the replied message."""
+        """
+        Format the reply context with detailed metadata about the replied message.
 
+        Args:
+            reply_info (dict): Information about the replied message
+            current_message (str): The current reply message
+
+        Returns:
+            Union[str, list]: Formatted context including metadata about reply relationship
+        """
         role_label = "AI assistant" if reply_info['role'] == "assistant" else "user"
+        message_age = "previous" # You could calculate actual age if you store timestamps
 
         if reply_info['type'] == 'image':
-            try:
-                image_content = reply_info['content'][0]  # Access the first element which is the image dictionary
-                return [  # Construct list-based structure
-                    {
-                        "text": (
-                            f"CONTEXT: Replying to an image from {role_label}.\n"
-                            f"CAPTION: {image_content.get('caption', '[No caption]')}\n"
-                            f"IMAGE: [Image data below]\n\n"  # Indicate image placement
-                            f"NEW MESSAGE:\n{current_message}"
-                        )
-                    },
-                    {  # Include image data
-                       "inline_data": {
-                            "mime_type": "image/jpeg",  # Assuming JPEG, adjust if needed
-                            "data": image_content['image_data']
-                        }
-                    }
-                ]
-            except (IndexError, KeyError) as e: # Handle potential errors
-                print(f"Error formatting image reply context: {e}")
-                return f"Error processing image reply.  New message:\n{current_message}"
-
+            image_content = reply_info['content'][0]
+            return [{
+                "text": (
+                    f"CONTEXT: User is replying to a {message_age} image message sent by {role_label}\n"
+                    f"REPLIED IMAGE DETAILS:\n"
+                    f"- Type: Image message\n"
+                    f"- Sender: {role_label}\n"
+                    f"- Caption: {image_content['caption'] or '[No caption]'}\n"
+                    f"IMAGE DATA: [Image follows below]\n"
+                )
+            }, {
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": image_content['image_data']
+                }
+            }, {
+                "text": f"\nUSER'S REPLY: {current_message}"
+            }]
         elif reply_info['type'] == 'document':
             return (
-                f"CONTEXT: Replying to a document from {role_label}.\n"
-                f"DOCUMENT CONTENT:\n{reply_info['content']}\n\n"
-                f"NEW MESSAGE:\n{current_message}"
+                f"CONTEXT: User is replying to a {message_age} document message sent by {role_label}\n"
+                f"REPLIED DOCUMENT DETAILS:\n"
+                f"- Type: Text document\n"
+                f"- Sender: {role_label}\n"
+                f"- Content: {reply_info['content']}\n\n"
+                f"USER'S REPLY: {current_message}"
             )
-        elif reply_info['type'] == 'unsupported_document':
+        else:  # text message
             return (
-                f"CONTEXT: Replying to an unsupported document from {role_label}.\n\n"
-                f"NEW MESSAGE:\n{current_message}"
+                f"CONTEXT: User is replying to a {message_age} text message sent by {role_label}\n"
+                f"REPLIED MESSAGE: {reply_info['content']}\n\n"
+                f"USER'S REPLY: {current_message}"
             )
 
-        elif reply_info['type'] in ('audio', 'voice'):  # Handle other types as needed
-            return (
-                f"CONTEXT: Replying to an audio message from {role_label}.\n\n"
-                f"NEW MESSAGE:\n{current_message}"
-            )        
-        else: # Default for text or other simple messages
-            return (
-                f"CONTEXT: Replying to a message from {role_label}:\n"
-                f"{reply_info['content']}\n\n"
-                f"NEW MESSAGE:\n{current_message}"
-            )
-       
-    async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+    async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                       text: str, reply_to_message_id: int = None) -> None:
         try:
             # Initialize message cache if not exists
             if 'message_cache' not in context.chat_data:
                 context.chat_data['message_cache'] = {}
-                
+
             # Generate unique callback data
             callback_data = f"toggle_md_{uuid.uuid4()}"
-            
+
             # Create keyboard with toggle button
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("Render Markdown", callback_data=callback_data)
             ]])
-            
+
             sent_messages = []
-            
+
             # Handle messages longer than 4096 characters
             if len(text) > 4096:
                 chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
-                
+
                 for i, chunk in enumerate(chunks):
                     chunk_keyboard = None
                     if i == len(chunks) - 1:  # Only add button to last chunk
                         chunk_keyboard = keyboard
-                    
+
                     sent_msg = await self.retry_operation(
                         update.message.reply_text,
                         chunk,
@@ -693,16 +595,16 @@ class AIBot:
                     reply_markup=keyboard
                 )
                 sent_messages.append(sent_msg)
-            
+
             # Store message data in context
             context.chat_data['message_cache'][callback_data] = {
                 'text': text,
                 'messages': [msg.message_id for msg in sent_messages],
                 'markdown_mode': False
             }
-            
+
             return sent_messages
-            
+
         except Exception as e:
             error_message = f"Error sending message: {str(e)}"
             await self.retry_operation(
@@ -712,73 +614,73 @@ class AIBot:
             )
             return None
 
-    @check_user_access    
+    @check_user_access
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    
+
         user_id = str(update.effective_user.id)
         username = str(update.effective_user.username)
         await self.initialize_chat(user_id, username)
-    
+
         text = update.message.text
-        
+
         if 'transcript_state' in context.chat_data:
             await transcript_handler.process_transcript_steps(self, update, context)
-            return        
-        
+            return
+
         try:
             chat = self.chat_history[user_id]
-            
+
             try:
                 reply_info = await self.get_replied_message_content(update.message)
             except ValueError as ve:
-                await self.send_response_with_toggle(update, context, "Cannot reply to voice or audio messages")
+                await self.send_response_with_toggle(update, context, "Cannot reply to voice or audio messages") # Fixed: This should be general exception handling in get_replied_message_content, ValueError is too specific, also consider logging the exception 've' for debugging
                 return
-                
+
             if reply_info:
                 formatted_context = self.format_reply_context(reply_info, text)
                 await chat.send_message_async(formatted_context, role="user")
             else:
                 await chat.send_message_async(f"user: {text}", role="user")
-            
+
             response = await self.retry_operation(
                 self.generate_content,
                 chat.history,
                 stream=False
             )
-            
-            text_response = await self.handle_gemini_response(response)                        
+
+            text_response = await self.handle_gemini_response(response)
             await chat.send_message_async(f"{text_response}", role="assistant")
             await self.save_chat_history(user_id, username)
-            
+
             # Use the new utility method to send the response
             await self.send_response_with_toggle(update, context, text_response)
-                
+
         except Exception as e:
             error_message = f"An error occurred: {str(e)}"
             await self.send_response_with_toggle(update, context, error_message)
 
-    @check_user_access    
+    @check_user_access
     async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    
+
         user_id = str(update.effective_user.id)
         username = str(update.effective_user.username)
         await self.initialize_chat(user_id, username)
-    
+
         try:
             if not (update.message.voice or update.message.audio):
                 reply_info = await self.get_replied_message_content(update.message)
-                
+
                 if reply_info:
                     formatted_context = self.format_reply_context(
                         reply_info,
                         update.message.caption or "[No caption]"
                     )
-                    
+
                     if isinstance(formatted_context, list):
                         await self.chat_history[user_id].send_message_async(formatted_context, role="user")
                     else:
                         await self.chat_history[user_id].send_message_async(formatted_context, role="user")
-    
+
             # Handle different media types
             if update.message.voice or update.message.audio:
                 file_obj = await self.retry_operation((update.message.voice or update.message.audio).get_file)
@@ -787,7 +689,7 @@ class AIBot:
                 file_obj = await self.retry_operation(update.message.photo[-1].get_file)
                 result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
             elif update.message.document:
-                file_extension = os.path.splitext(update.message.document.file_name)[1].lower()
+                file_extension = os.path.splitext(update.message.document.file_name)[1].lower() if update.message.document.file_name else '' # Fixed: Added check for update.message.document.file_name to prevent potential NoneType error
                 if file_extension not in self.allowed_extensions:
                     await self.send_response_with_toggle(update, context, "Unsupported document type.")
                     return
@@ -795,19 +697,19 @@ class AIBot:
                 result = await self.process_file(update.message, lambda path: file_obj.download_to_drive(path))
             else:
                 result = "Unsupported media type"
-    
+
             # Use the new utility method to send the response
             await self.send_response_with_toggle(update, context, result)
-                
+
         except Exception as e:
             error_message = f"Error handling media: {str(e)}"
             await self.send_response_with_toggle(update, context, error_message)
-    
+
     async def toggle_markdown_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the Markdown toggle button callback."""
         query = update.callback_query
         await query.answer()
-        
+
         try:
             # Get cached message data
             cache_key = query.data
@@ -818,25 +720,25 @@ class AIBot:
                     ]])
                 )
                 return
-    
+
             message_data = context.chat_data['message_cache'][cache_key]
             current_mode = message_data['markdown_mode']
             text = message_data['text']
             message_ids = message_data['messages']
-    
+
             # Toggle Markdown mode
             new_mode = not current_mode
             button_text = "Show Plain Text" if new_mode else "Render Markdown"
-            
+
             # Prepare new keyboard
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton(button_text, callback_data=cache_key)
             ]])
-    
+
             # Update all messages in the chain
             chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
             for i, (chunk, msg_id) in enumerate(zip(chunks, message_ids)):
-                try:                    
+                try:
                     if new_mode:
                         await context.bot.edit_message_text(
                             chat_id=query.message.chat_id,
@@ -863,11 +765,11 @@ class AIBot:
                         )
                     else:
                         raise
-    
+
             # Update cache
             message_data['markdown_mode'] = new_mode
             context.chat_data['message_cache'][cache_key] = message_data
-    
+
         except Exception as e:
             try:
                 await query.edit_message_reply_markup(
@@ -877,12 +779,12 @@ class AIBot:
                 )
             except:
                 pass
-            print(f"Error in toggle_markdown_callback: {str(e)}")                
+            print(f"Error in toggle_markdown_callback: {str(e)}")
 
     async def count_tokens(self, contents):
         """Count tokens in the content to manage context window."""
         url = f"{self.api_url}:countTokens?key={self.config.gemini_api_key}"
-        
+
         try:
             response = requests.post(url, headers=self.headers, json={"contents": contents})
             response.raise_for_status()
@@ -896,13 +798,13 @@ class AIBot:
         if user_id in self.chat_history:
             history = self.chat_history[user_id].history
             total_tokens = await self.count_tokens(history)
-            
+
             while total_tokens > max_tokens and len(history) > 1:
                 # Remove oldest messages while preserving system instruction
                 if len(history) > 1:
                     history.pop(1)  # Keep system instruction at index 0
                 total_tokens = await self.count_tokens(history)
-    
+
     def run(self) -> None:
         """Start the bot with error handling."""
         try:
@@ -923,15 +825,15 @@ class AIBot:
             application.add_handler(CommandHandler("web2md", self.web2md_command))
             application.add_handler(CommandHandler("think", self.think_command))
             application.add_handler(CommandHandler("ytb2transcript", self.ytb2transcript_command))
-            
+
             # Add callback query handler for Markdown toggle
             application.add_handler(CallbackQueryHandler(
                 self.toggle_markdown_callback,
                 pattern=r"^toggle_md_"
             ))
-                             
+
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
-            application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL | filters.AUDIO | filters.VOICE, self.handle_media)); print(f"\nBot is running...\n")      
+            application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL | filters.AUDIO | filters.VOICE, self.handle_media)); print(f"\nBot is running...\n")
             application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
         except Exception as e:

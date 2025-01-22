@@ -117,7 +117,57 @@ from utils.commands.help import help_command
 from utils.commands.clear import clear_command
 from utils.commands.think import think_command
 from utils.commands.ytb2transcript import handler as transcript_handler
+from telegram.helpers import escape_markdown
 
+def custom_markdown_escape(text: str) -> str:
+    """
+    Improved Markdown escape function that handles code blocks and quote blocks correctly.
+    
+    Args:
+        text: Input text to escape
+        
+    Returns:
+        Properly escaped text for MarkdownV2 format
+    """
+    if not isinstance(text, str):
+        return str(text)
+        
+    # First, identify and protect code blocks
+    code_blocks = []
+    protected_text = text
+    code_pattern = r'```(?:\w+)?\n(?:.*?)\n```'
+    
+    def save_code_block(match):
+        code_blocks.append(match.group(0))
+        return f"<<CODE_BLOCK_{len(code_blocks)-1}>>"
+        
+    protected_text = re.sub(code_pattern, save_code_block, protected_text, flags=re.DOTALL)
+    
+    # Characters that need escaping in MarkdownV2
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    
+    lines = protected_text.split('\n')
+    escaped_lines = []
+    
+    for line in lines:
+        if line.startswith('>'):
+            # Handle quote blocks - escape everything except the initial '>'
+            quote_content = ''.join([f'\\{c}' if c in escape_chars else c for c in line[1:]])
+            escaped_lines.append('>' + quote_content)
+        else:
+            # Escape all special characters in normal text
+            escaped_line = ''.join([f'\\{c}' if c in escape_chars else c for c in line])
+            escaped_lines.append(escaped_line)
+    
+    escaped_text = '\n'.join(escaped_lines)
+    
+    # Restore code blocks
+    for i, block in enumerate(code_blocks):
+        escaped_text = escaped_text.replace(f"<<CODE_BLOCK_{i}>>", block)
+    
+    return escaped_text
+    
+    
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
         self.config_path = config_path
@@ -532,185 +582,304 @@ class AIBot:
 
     async def get_replied_message_content(self, message: Message) -> Optional[dict]:
         """
-        Extract content and metadata from the replied-to message.
-        Returns None if this is a new message (not a reply).
-
+        Enhanced function to extract content and metadata from replied-to messages.
+        Handles various message types and potential parsing errors.
+        
         Args:
             message: The Telegram message object
-
+            
         Returns:
-            Optional[dict]: Message content and metadata if it's a reply, None otherwise
+            Optional[dict]: Message content and metadata, or None if not a reply
         """
         if not message.reply_to_message:
             return None
-
+            
         replied_msg = message.reply_to_message
         result = {
             'content': None,
             'role': 'assistant' if replied_msg.from_user.is_bot else 'user',
-            'type': 'unknown'
+            'type': 'unknown',
+            'metadata': {}
         }
-
+        
         try:
+            # Handle text messages
             if replied_msg.text:
-                result['content'] = replied_msg.text
-                result['type'] = 'text'
+                result.update({
+                    'content': replied_msg.text,
+                    'type': 'text',
+                    'metadata': {
+                        'length': len(replied_msg.text),
+                        'has_entities': bool(replied_msg.entities)
+                    }
+                })
+                
+            # Handle photos
             elif replied_msg.photo:
-                file_obj = await self.retry_operation(replied_msg.photo[-1].get_file)
+                photo = replied_msg.photo[-1]  # Get highest resolution
+                file_obj = await self.retry_operation(photo.get_file)
+                
                 with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
-                    await file_obj.download_to_drive(temp_file.name)
                     try:
+                        await file_obj.download_to_drive(temp_file.name)
                         with Image.open(temp_file.name) as img:
+                            img_format = img.format
+                            width, height = img.size
+                            
                             buf = io.BytesIO()
                             img.save(buf, format='JPEG')
                             img_b64 = base64.b64encode(buf.getvalue()).decode()
-                            result['content'] = [{  # Enclose in a list for consistency
-                                "text": "[Image]",
-                                "image_data": img_b64,
-                                "caption": replied_msg.caption or ""
-                            }]
-                            result['type'] = 'image'
+                            
+                            result.update({
+                                'content': [{
+                                    'text': '[Image]',
+                                    'image_data': img_b64,
+                                    'caption': replied_msg.caption or ''
+                                }],
+                                'type': 'image',
+                                'metadata': {
+                                    'width': width,
+                                    'height': height,
+                                    'format': img_format,
+                                    'file_size': photo.file_size
+                                }
+                            })
                     finally:
                         os.unlink(temp_file.name)
+                        
+            # Handle documents
             elif replied_msg.document:
-                if replied_msg.document.file_name.endswith(tuple(self.allowed_extensions)):
-                    file_obj = await self.retry_operation(replied_msg.document.get_file)
+                doc = replied_msg.document
+                if doc.file_name.endswith(tuple(self.allowed_extensions)):
+                    file_obj = await self.retry_operation(doc.get_file)
                     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                        await file_obj.download_to_drive(temp_file.name)
                         try:
+                            await file_obj.download_to_drive(temp_file.name)
                             with open(temp_file.name, 'r', encoding='utf-8') as f:
-                                result['content'] = f.read()
-                                result['type'] = 'document'
+                                content = f.read()
+                                result.update({
+                                    'content': content,
+                                    'type': 'document',
+                                    'metadata': {
+                                        'filename': doc.file_name,
+                                        'mime_type': doc.mime_type,
+                                        'file_size': doc.file_size
+                                    }
+                                })
+                        except UnicodeDecodeError:
+                            result.update({
+                                'content': '[Binary document]',
+                                'type': 'binary_document',
+                                'metadata': {
+                                    'filename': doc.file_name,
+                                    'mime_type': doc.mime_type,
+                                    'file_size': doc.file_size
+                                }
+                            })
                         finally:
                             os.unlink(temp_file.name)
                 else:
-                    result['content'] = "[Unsupported Document]"
-                    result['type'] = 'unsupported_document'
+                    raise ValueError(f"Unsupported document type: {doc.file_name}")
+                    
+            # Handle voice/audio messages
             elif replied_msg.voice or replied_msg.audio:
-                result['content'] = "[Audio message]"  # or handle audio data if needed
-                result['type'] = 'audio'
-            # Add more elif blocks for other message types as required (video, sticker, etc.)
-
+                audio_msg = replied_msg.voice or replied_msg.audio
+                result.update({
+                    'content': '[Audio message]',
+                    'type': 'audio',
+                    'metadata': {
+                        'duration': audio_msg.duration,
+                        'file_size': audio_msg.file_size,
+                        'mime_type': getattr(audio_msg, 'mime_type', 'audio/ogg')
+                    }
+                })
+                
         except Exception as e:
             print(f"Error processing replied message: {str(e)}")
-            result['content'] = "[Error processing previous message]"
-            result['type'] = 'error'
-
+            result.update({
+                'content': f"[Error processing message: {str(e)}]",
+                'type': 'error',
+                'metadata': {'error': str(e)}
+            })
+            
         return result
-
-
-
+        
     def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
-        """Format the reply context with metadata about the replied message."""
-
+        """
+        Enhanced function to format reply context with better metadata handling and error checking.
+        
+        Args:
+            reply_info: Dictionary containing reply message information
+            current_message: The current message text
+            
+        Returns:
+            Formatted context as either a string or list depending on content type
+        """
+        if not reply_info or not isinstance(reply_info, dict):
+            return f"USER MESSAGE: {current_message}"
+            
         role_label = "AI assistant" if reply_info['role'] == "assistant" else "user"
-
-        if reply_info['type'] == 'image':
-            try:
-                image_content = reply_info['content'][0]  # Access the first element which is the image dictionary
-                return [  # Construct list-based structure
-                    {
-                        "text": (
-                            f"CONTEXT: Replying to an image from {role_label}.\n"
-                            f"CAPTION: {image_content.get('caption', '[No caption]')}\n"
-                            f"IMAGE: [Image data below]\n\n"  # Indicate image placement
-                            f"NEW MESSAGE:\n{current_message}"
-                        )
-                    },
-                    {  # Include image data
-                       "inline_data": {
-                            "mime_type": "image/jpeg",  # Assuming JPEG, adjust if needed
-                            "data": image_content['image_data']
-                        }
-                    }
-                ]
-            except (IndexError, KeyError) as e: # Handle potential errors
-                print(f"Error formatting image reply context: {e}")
-                return f"Error processing image reply.  New message:\n{current_message}"
-
-        elif reply_info['type'] == 'document':
-            return (
-                f"CONTEXT: Replying to a document from {role_label}.\n"
-                f"DOCUMENT CONTENT:\n{reply_info['content']}\n\n"
-                f"NEW MESSAGE:\n{current_message}"
-            )
-        elif reply_info['type'] == 'unsupported_document':
-            return (
-                f"CONTEXT: Replying to an unsupported document from {role_label}.\n\n"
-                f"NEW MESSAGE:\n{current_message}"
-            )
-
-        elif reply_info['type'] in ('audio', 'voice'):  # Handle other types as needed
-            return (
-                f"CONTEXT: Replying to an audio message from {role_label}.\n\n"
-                f"NEW MESSAGE:\n{current_message}"
-            )        
-        else: # Default for text or other simple messages
-            return (
-                f"CONTEXT: Replying to a message from {role_label}:\n"
-                f"{reply_info['content']}\n\n"
-                f"NEW MESSAGE:\n{current_message}"
-            )
-       
-    async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                      text: str, reply_to_message_id: int = None) -> None:
+        metadata = reply_info.get('metadata', {})
+        
         try:
-            # Initialize message cache if not exists
+            if reply_info['type'] == 'image':
+                if not isinstance(reply_info['content'], list) or not reply_info['content']:
+                    raise ValueError("Invalid image content format")
+                    
+                image_content = reply_info['content'][0]
+                return [{
+                    "text": (
+                        f"CONTEXT: Image message reply\n"
+                        f"METADATA:\n"
+                        f"- Sender: {role_label}\n"
+                        f"- Image size: {metadata.get('width', 'unknown')}x{metadata.get('height', 'unknown')}\n"
+                        f"- Format: {metadata.get('format', 'unknown')}\n"
+                        f"- File size: {metadata.get('file_size', 0) / 1024:.1f}KB\n"
+                        f"- Caption: {image_content.get('caption', '[No caption]')}\n"
+                        f"IMAGE DATA: [Image follows]\n"
+                    )
+                }, {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": image_content.get('image_data', '')
+                    }
+                }, {
+                    "text": f"\nUSER'S REPLY: {current_message}"
+                }]
+                
+            elif reply_info['type'] == 'document':
+                return (
+                    f"CONTEXT: Document message reply\n"
+                    f"METADATA:\n"
+                    f"- Sender: {role_label}\n"
+                    f"- Filename: {metadata.get('filename', 'unknown')}\n"
+                    f"- Type: {metadata.get('mime_type', 'unknown')}\n"
+                    f"- Size: {metadata.get('file_size', 0) / 1024:.1f}KB\n\n"
+                    f"DOCUMENT CONTENT:\n{reply_info['content']}\n\n"
+                    f"USER'S REPLY: {current_message}"
+                )
+                
+            elif reply_info['type'] == 'audio':
+                return (
+                    f"CONTEXT: Audio message reply\n"
+                    f"METADATA:\n"
+                    f"- Sender: {role_label}\n"
+                    f"- Duration: {metadata.get('duration', 0)}s\n"
+                    f"- Type: {metadata.get('mime_type', 'audio/unknown')}\n"
+                    f"- Size: {metadata.get('file_size', 0) / 1024:.1f}KB\n\n"
+                    f"USER'S REPLY: {current_message}"
+                )
+                
+            elif reply_info['type'] == 'error':
+                return (
+                    f"CONTEXT: Error in previous message\n"
+                    f"ERROR: {metadata.get('error', 'Unknown error')}\n\n"
+                    f"USER'S REPLY: {current_message}"
+                )
+                
+            else:  # text or unknown type
+                return (
+                    f"CONTEXT: Text message reply\n"
+                    f"SENDER: {role_label}\n"
+                    f"PREVIOUS MESSAGE: {reply_info['content']}\n\n"
+                    f"USER'S REPLY: {current_message}"
+                )
+                
+        except Exception as e:
+            print(f"Error formatting reply context: {str(e)}")
+            return f"CONTEXT: Error formatting reply\nUSER'S REPLY: {current_message}"
+    
+           
+    async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                      text: str, reply_to_message_id: int = None) -> Optional[list]:
+        """
+        Enhanced function to send responses with proper chunking and markdown toggle support.
+        
+        Args:
+            update: Telegram update object
+            context: Bot context
+            text: Text to send
+            reply_to_message_id: Optional message ID to reply to
+            
+        Returns:
+            List of sent messages or None if error
+        """
+        if not text:
+            return None
+            
+        try:
             if 'message_cache' not in context.chat_data:
                 context.chat_data['message_cache'] = {}
                 
-            # Generate unique callback data
             callback_data = f"toggle_md_{uuid.uuid4()}"
-            
-            # Create keyboard with toggle button
             keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("Render Markdown", callback_data=callback_data)
+                InlineKeyboardButton("Toggle Markdown", callback_data=callback_data)
             ]])
             
+            # Initialize message tracking
             sent_messages = []
+            safe_text = custom_markdown_escape(text)
             
-            # Handle messages longer than 4096 characters
-            if len(text) > 4096:
-                chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
+            # Split text into chunks if needed
+            MAX_LENGTH = 4096
+            text_chunks = []
+            safe_chunks = []
+            
+            for i in range(0, len(text), MAX_LENGTH):
+                text_chunks.append(text[i:i + MAX_LENGTH])
+                safe_chunks.append(safe_text[i:i + MAX_LENGTH])
+            
+            # Send each chunk
+            for i, (chunk, safe_chunk) in enumerate(zip(text_chunks, safe_chunks)):
+                is_last_chunk = i == len(text_chunks) - 1
                 
-                for i, chunk in enumerate(chunks):
-                    chunk_keyboard = None
-                    if i == len(chunks) - 1:  # Only add button to last chunk
-                        chunk_keyboard = keyboard
-                    
+                try:
                     sent_msg = await self.retry_operation(
                         update.message.reply_text,
-                        chunk,
+                        safe_chunk,
                         reply_to_message_id=reply_to_message_id if i == 0 else None,
-                        reply_markup=chunk_keyboard
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                        reply_markup=keyboard if is_last_chunk else None
                     )
                     sent_messages.append(sent_msg)
-            else:
-                sent_msg = await self.retry_operation(
-                    update.message.reply_text,
-                    text,
-                    reply_to_message_id=reply_to_message_id,
-                    reply_markup=keyboard
-                )
-                sent_messages.append(sent_msg)
-            
-            # Store message data in context
-            context.chat_data['message_cache'][callback_data] = {
-                'text': text,
-                'messages': [msg.message_id for msg in sent_messages],
-                'markdown_mode': False
-            }
-            
+                    
+                except telegram.error.BadRequest as e:
+                    if "Can't parse entities" in str(e):
+                        # Fallback to plain text if markdown fails
+                        sent_msg = await self.retry_operation(
+                            update.message.reply_text,
+                            chunk,
+                            reply_to_message_id=reply_to_message_id if i == 0 else None,
+                            reply_markup=keyboard if is_last_chunk else None
+                        )
+                        sent_messages.append(sent_msg)
+                    else:
+                        raise
+    
+            # Cache message data for toggle functionality
+            if sent_messages:
+                context.chat_data['message_cache'][callback_data] = {
+                    'original_text': text,
+                    'safe_text': safe_text,
+                    'messages': [msg.message_id for msg in sent_messages],
+                    'markdown_mode': True,
+                    'chunks': list(zip(text_chunks, safe_chunks))
+                }
+                
             return sent_messages
             
         except Exception as e:
             error_message = f"Error sending message: {str(e)}"
-            await self.retry_operation(
-                update.message.reply_text,
-                error_message,
-                reply_to_message_id=reply_to_message_id
-            )
+            try:
+                await self.retry_operation(
+                    update.message.reply_text,
+                    error_message,
+                    reply_to_message_id=reply_to_message_id
+                )
+            except Exception as send_error:
+                print(f"Critical error sending message: {str(send_error)}")
             return None
+        
 
     @check_user_access    
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -746,12 +915,15 @@ class AIBot:
                 stream=False
             )
             
-            text_response = await self.handle_gemini_response(response)                        
-            await chat.send_message_async(f"{text_response}", role="assistant")
+            # In handle_text:
+            text_response = await self.handle_gemini_response(response)
+            escaped_response = custom_markdown_escape(text_response)
+            await self.send_response_with_toggle(update, context, escaped_response)
+            
             await self.save_chat_history(user_id, username)
             
             # Use the new utility method to send the response
-            await self.send_response_with_toggle(update, context, text_response)
+            # await self.send_response_with_toggle(update, context, text_response)
                 
         except Exception as e:
             error_message = f"An error occurred: {str(e)}"
@@ -797,87 +969,83 @@ class AIBot:
                 result = "Unsupported media type"
     
             # Use the new utility method to send the response
-            await self.send_response_with_toggle(update, context, result)
-                
+            await self.send_response_with_toggle(update, context, custom_markdown_escape(result))
+
         except Exception as e:
             error_message = f"Error handling media: {str(e)}"
             await self.send_response_with_toggle(update, context, error_message)
-    
+            
     async def toggle_markdown_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle the Markdown toggle button callback."""
+        """
+        Enhanced callback handler for toggling between markdown and plain text display.
+        
+        Args:
+            update: Telegram update object
+            context: Bot context
+        """
         query = update.callback_query
         await query.answer()
         
         try:
-            # Get cached message data
             cache_key = query.data
-            if 'message_cache' not in context.chat_data or cache_key not in context.chat_data['message_cache']:
-                await query.edit_message_reply_markup(
-                    InlineKeyboardMarkup([[
-                        InlineKeyboardButton("Message expired", callback_data="expired")
-                    ]])
-                )
-                return
-    
-            message_data = context.chat_data['message_cache'][cache_key]
-            current_mode = message_data['markdown_mode']
-            text = message_data['text']
-            message_ids = message_data['messages']
-    
-            # Toggle Markdown mode
-            new_mode = not current_mode
-            button_text = "Show Plain Text" if new_mode else "Render Markdown"
+            message_data = context.chat_data['message_cache'].get(cache_key)
             
-            # Prepare new keyboard
+            if not message_data:
+                print(f"No cached data found for key: {cache_key}")
+                await query.edit_message_reply_markup(reply_markup=None)
+                return
+            
+            # Toggle mode
+            new_mode = not message_data['markdown_mode']
+            button_text = "Show Plain Text" if new_mode else "Render Markdown"
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton(button_text, callback_data=cache_key)
             ]])
-    
-            # Update all messages in the chain
-            chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
-            for i, (chunk, msg_id) in enumerate(zip(chunks, message_ids)):
-                try:                    
-                    if new_mode:
-                        await context.bot.edit_message_text(
-                            chat_id=query.message.chat_id,
-                            message_id=msg_id,
-                            text=chunk,
-                            parse_mode=ParseMode.MARKDOWN,
-                            reply_markup=keyboard if i == len(message_ids) - 1 else None
-                        )
-                    else:
-                        await context.bot.edit_message_text(
-                            chat_id=query.message.chat_id,
-                            message_id=msg_id,
-                            text=chunk,
-                            reply_markup=keyboard if i == len(message_ids) - 1 else None
-                        )
+            
+            # Update each message chunk
+            for msg_id in message_data['messages']:
+                chunk_index = message_data['messages'].index(msg_id)
+                is_last_chunk = chunk_index == len(message_data['messages']) - 1
+                
+                try:
+                    current_chunks = message_data['chunks'][chunk_index]
+                    text_to_use = current_chunks[1] if new_mode else current_chunks[0]
+                    
+                    await context.bot.edit_message_text(
+                        chat_id=query.message.chat_id,
+                        message_id=msg_id,
+                        text=text_to_use,
+                        parse_mode=ParseMode.MARKDOWN_V2 if new_mode else None,
+                        reply_markup=keyboard if is_last_chunk else None
+                    )
+                    
                 except telegram.error.BadRequest as e:
-                    if "can't parse entities" in str(e).lower():
-                        # Markdown parsing failed, revert to plain text
+                    if "Can't parse entities" in str(e):
+                        # Fallback to safe text
                         await context.bot.edit_message_text(
                             chat_id=query.message.chat_id,
                             message_id=msg_id,
-                            text=f"⚠️ Markdown rendering failed. Some syntax might be invalid:\n\n{chunk}",
-                            reply_markup=keyboard if i == len(message_ids) - 1 else None
+                            text=current_chunks[1],  # Use safe text
+                            parse_mode=None,
+                            reply_markup=keyboard if is_last_chunk else None
                         )
                     else:
-                        raise
-    
-            # Update cache
+                        print(f"Error updating message {msg_id}: {str(e)}")
+            
+            # Update cached state
             message_data['markdown_mode'] = new_mode
             context.chat_data['message_cache'][cache_key] = message_data
-    
+            
         except Exception as e:
+            print(f"Error in toggle callback: {str(e)}")
             try:
-                await query.edit_message_reply_markup(
-                    InlineKeyboardMarkup([[
-                        InlineKeyboardButton("Error occurred", callback_data="error")
-                    ]])
-                )
-            except:
+                await query.edit_message_reply_markup(reply_markup=None)
+            except Exception:
                 pass
-            print(f"Error in toggle_markdown_callback: {str(e)}")                
+        
+
+
+
 
     async def count_tokens(self, contents):
         """Count tokens in the content to manage context window."""
@@ -937,6 +1105,272 @@ class AIBot:
         except Exception as e:
             print(f"Critical error: {str(e)}")
             raise
+
+
+
+
+
+class MediaProcessor:
+    """New class to handle media processing operations"""
+    
+    def __init__(self, allowed_extensions: set):
+        self.allowed_extensions = allowed_extensions
+        self.temp_files = set()  # Track temporary files
+        
+    def __del__(self):
+        """Cleanup any remaining temporary files"""
+        self.cleanup_temp_files()
+        
+    def cleanup_temp_files(self):
+        """Clean up all registered temporary files"""
+        for file_path in self.temp_files:
+            try:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(f"Error cleaning up temp file {file_path}: {str(e)}")
+        self.temp_files.clear()
+
+    async def process_file(self, message: Message, download_func: Callable) -> dict:
+        """
+        Enhanced file processing with better error handling and resource management.
+        
+        Args:
+            message: Telegram message containing the file
+            download_func: Function to download the file
+            
+        Returns:
+            Dict containing processed file information and content
+        """
+        temp_file = None
+        try:
+            # Create temporary file with appropriate extension
+            file_extension = self.get_file_extension(message)
+            with tempfile.NamedTemporaryFile(suffix=file_extension, delete=False) as temp_file:
+                self.temp_files.add(temp_file.name)
+                await download_func(temp_file.name)
+                
+                return await self.handle_processed_file(temp_file.name, message)
+                
+        except Exception as e:
+            raise ProcessingError(f"File processing error: {str(e)}")
+        finally:
+            if temp_file and temp_file.name in self.temp_files:
+                self.cleanup_temp_files()
+
+    def get_file_extension(self, message: Message) -> str:
+        """
+        Determine appropriate file extension based on message type.
+        
+        Args:
+            message: Telegram message
+            
+        Returns:
+            String containing the file extension
+        """
+        if message.document:
+            original_extension = os.path.splitext(message.document.file_name)[1].lower()
+            if original_extension in self.allowed_extensions:
+                return original_extension
+            raise ValueError(f"Unsupported file type: {original_extension}")
+            
+        elif message.photo:
+            return '.jpg'
+        elif message.voice:
+            return '.ogg'
+        elif message.audio:
+            return self.get_audio_extension(message.audio)
+        else:
+            raise ValueError("Unsupported message type")
+            
+    def get_audio_extension(self, audio) -> str:
+        """
+        Determine audio file extension based on mime type.
+        
+        Args:
+            audio: Telegram audio object
+            
+        Returns:
+            String containing the audio file extension
+        """
+        mime_to_ext = {
+            'audio/mpeg': '.mp3',
+            'audio/mp4': '.m4a',
+            'audio/ogg': '.ogg',
+            'audio/wav': '.wav',
+            'audio/x-wav': '.wav'
+        }
+        return mime_to_ext.get(audio.mime_type, '.mp3')
+
+    async def handle_processed_file(self, file_path: str, message: Message) -> dict:
+        """
+        Process different types of files and prepare them for AI processing.
+        
+        Args:
+            file_path: Path to the temporary file
+            message: Original Telegram message
+            
+        Returns:
+            Dict containing processed content and metadata
+        """
+        result = {
+            'content': None,
+            'metadata': {
+                'file_type': None,
+                'mime_type': None,
+                'file_size': os.path.getsize(file_path),
+                'timestamp': datetime.now().isoformat()
+            }
+        }
+        
+        try:
+            if message.photo:
+                result.update(await self.process_image(file_path, message))
+            elif message.document:
+                result.update(await self.process_document(file_path, message))
+            elif message.audio or message.voice:
+                result.update(await self.process_audio(file_path, message))
+            else:
+                raise ValueError("Unsupported message type")
+                
+            return result
+            
+        except Exception as e:
+            raise ProcessingError(f"Error processing file: {str(e)}")
+
+    async def process_image(self, file_path: str, message: Message) -> dict:
+        """
+        Process image files with proper error handling and metadata extraction.
+        
+        Args:
+            file_path: Path to the temporary image file
+            message: Original Telegram message
+            
+        Returns:
+            Dict containing processed image data and metadata
+        """
+        try:
+            with Image.open(file_path) as img:
+                # Convert RGBA to RGB if necessary
+                if img.mode == 'RGBA':
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[3])
+                    img = background
+                
+                # Resize if image is too large
+                max_dimension = 1024
+                if max(img.size) > max_dimension:
+                    ratio = max_dimension / max(img.size)
+                    new_size = tuple(int(dim * ratio) for dim in img.size)
+                    img = img.resize(new_size, Image.Resampling.LANCZOS)
+                
+                # Convert to JPEG and get base64
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG', quality=85)
+                img_b64 = base64.b64encode(buf.getvalue()).decode()
+                
+                return {
+                    'content': [{
+                        'text': caption_text,
+                        'image_data': img_b64
+                    }],
+                    'metadata': {
+                        'file_type': 'image',
+                        'mime_type': 'image/jpeg',
+                        'width': img.size[0],
+                        'height': img.size[1],
+                        'mode': img.mode,
+                        'format': img.format,
+                        'caption': message.caption or ''
+                    }
+                }
+                
+        except Exception as e:
+            raise ProcessingError(f"Image processing error: {str(e)}")
+
+    async def process_document(self, file_path: str, message: Message) -> dict:
+        """
+        Process document files with encoding detection and error handling.
+        
+        Args:
+            file_path: Path to the temporary document file
+            message: Original Telegram message
+            
+        Returns:
+            Dict containing processed document content and metadata
+        """
+        try:
+            # Try different encodings
+            encodings = ['utf-8', 'latin1', 'cp1252']
+            content = None
+            used_encoding = None
+            
+            for encoding in encodings:
+                try:
+                    with open(file_path, 'r', encoding=encoding) as f:
+                        content = f.read()
+                        used_encoding = encoding
+                        break
+                except UnicodeDecodeError:
+                    continue
+                    
+            if content is None:
+                raise ValueError("Could not decode file with any supported encoding")
+                
+            return {
+                'content': content,
+                'metadata': {
+                    'file_type': 'document',
+                    'mime_type': message.document.mime_type,
+                    'filename': message.document.file_name,
+                    'encoding': used_encoding
+                }
+            }
+            
+        except Exception as e:
+            raise ProcessingError(f"Document processing error: {str(e)}")
+
+    async def process_audio(self, file_path: str, message: Message) -> dict:
+        """
+        Process audio files with proper metadata extraction.
+        
+        Args:
+            file_path: Path to the temporary audio file
+            message: Original Telegram message
+            
+        Returns:
+            Dict containing processed audio data and metadata
+        """
+        try:
+            audio_msg = message.audio or message.voice
+            with open(file_path, 'rb') as f:
+                audio_b64 = base64.b64encode(f.read()).decode()
+                
+            return {
+                'content': [{
+                    'text': f"Audio message - Duration: {audio_msg.duration}s",
+                    'audio_data': audio_b64
+                }],
+                'metadata': {
+                    'file_type': 'audio',
+                    'mime_type': getattr(audio_msg, 'mime_type', 'audio/ogg'),
+                    'duration': audio_msg.duration,
+                    'file_size': audio_msg.file_size,
+                    'voice': bool(message.voice)
+                }
+            }
+            
+        except Exception as e:
+            raise ProcessingError(f"Audio processing error: {str(e)}")
+
+class ProcessingError(Exception):
+    """Custom exception for file processing errors"""
+    pass
+
+
+
+
+
 
 if __name__ == "__main__":
     config_editor()
