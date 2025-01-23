@@ -44,7 +44,7 @@ The bot is capable of:
 -   `/ytb2mp3 <url>`: Downloads the audio from a YouTube video as an MP3 file.
 -   `/web2md <url>`: Converts a webpage to a markdown file.
 -   `/think <query>`:  Provides a detailed reasoning for the AI bot's response to the query. 
-> The Think command is a standalone function and not related to the main model or context and the generated responses are not saved in the context history.
+    > The Think command is a standalone function and not related to the main model or context and the generated responses are not saved in the context history.
 -   `/ytb2transcript <url>`: Extracts the transcript from a YouTube video.
 
 ## Setup
