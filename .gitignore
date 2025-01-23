@@ -1,4 +1,5 @@
 venv/
+other/
 */venv/
 data/
 __pycache__/
