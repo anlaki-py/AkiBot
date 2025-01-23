@@ -193,7 +193,7 @@ class Response:
 class AIBot:
     MAX_RETRIES = 3
     RETRY_DELAY = 3  # seconds
-    USER_DATA_ROOT = "data/users"
+    HISTORY_DIR = "history"
     GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
     INSTAGRAM_URL_REGEX = re.compile(
         r'(?:https?://)?(?:www\.)?instagram\.com/(?:p/|reel/)([\w-]+)')
@@ -201,6 +201,7 @@ class AIBot:
     def __init__(self):
         self.config = Config()
         self.chat_history = {}
+        self.history_dir = self.HISTORY_DIR
         self.instagram_downloader = InstagramDownloader(
         )  # Instantiate the InstagramDownloader
         self.youtube_downloader = YouTubeDownloader()
@@ -223,37 +224,8 @@ class AIBot:
             ".pas", ".groovy"
         }
 
-    def get_user_dir(self, user_id: str, username: str) -> str:
-        """Get base directory for user data."""
-        sanitized_username = (username.replace(" ", "_").replace("/", "-") 
-                             if username else "unknown")
-        return os.path.join(
-            self.USER_DATA_ROOT,
-            f"{sanitized_username}_{user_id}"
-        )    
-
-    def get_history_file_path(self, user_id: str, username: str) -> str:
-        """Generate history file path in user-specific directory."""
-        sanitized_username = (username.replace(" ", "_").replace("/", "-") 
-                            if username else "unknown")
-        user_dir = os.path.join(
-            self.USER_DATA_ROOT,
-            f"{sanitized_username}_{user_id}"
-        )
-        history_dir = os.path.join(user_dir, "history")
-        os.makedirs(history_dir, exist_ok=True)
-        return os.path.join(history_dir, "chat_history.pkl")
-
-    async def load_chat_history(self, user_id: str, username: str) -> Optional[list]:
-        """Load chat history from new directory structure."""
-        file_path = self.get_history_file_path(user_id, username)
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, 'rb') as f:
-                    return pickle.load(f)
-            except Exception as e:
-                print(f"Error loading history: {e}")
-        return None
+        if not os.path.exists(self.history_dir):
+            os.makedirs(self.history_dir)
 
     async def generate_content(self, contents, stream=False):
         endpoint = "streamGenerateContent" if stream else "generateContent"
@@ -356,13 +328,11 @@ class AIBot:
 
         return wrapper
 
-    # New helper method for info files
-    def get_info_file_path(self, user_id: str, username: str, filename: str) -> str:
-        """Get path for user info files."""
-        user_dir = self.get_user_dir(user_id, username)
-        info_dir = os.path.join(user_dir, "info")
-        os.makedirs(info_dir, exist_ok=True)
-        return os.path.join(info_dir, filename)
+    def get_history_file_path(self, user_id: str, username: str) -> str:
+        """Generate the file path for a user's chat history."""
+        username = username.replace(" ", "_") if username else "unknown"
+        filename = f"{username}_{user_id}.pkl"
+        return os.path.join(self.history_dir, filename)
 
     async def load_chat_history(self, user_id: str,
                                 username: str) -> Optional[list]:
@@ -379,15 +349,14 @@ class AIBot:
         return None
 
     async def save_chat_history(self, user_id: str, username: str) -> None:
-        """Save chat history to user-specific directory."""
+        """Save chat history to a pickle file."""
         file_path = self.get_history_file_path(user_id, username)
         try:
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, 'wb') as f:
                 pickle.dump(self.chat_history[user_id].history, f)
         except Exception as e:
-            print(f"Error saving chat history: {e}")
-            
+            print(f"Error saving chat history to {file_path}: {e}")
+
     async def initialize_chat(self, user_id: str, username: str) -> None:
         """Initialize chat history for a user if not exists."""
         if user_id not in self.chat_history:
@@ -538,7 +507,7 @@ class AIBot:
             
 # = Basic Commands ============================================================================================================
 
-    # @check_user_access
+    @check_user_access
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await start_command(self, update, context)
 
