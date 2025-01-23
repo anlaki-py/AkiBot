@@ -1,4 +1,4 @@
-# main.py v1.4.46
+# main.py v1.4.50
 """
 === MAINTENANCE AND MODIFICATION GUIDE ===
 
@@ -229,16 +229,7 @@ class AIBot:
 
     async def generate_content(self, contents, stream=False):
         endpoint = "streamGenerateContent" if stream else "generateContent"
-        url = f"{self.api_url}:{endpoint}?{'alt=sse&' if stream else ''}key={self.config.gemini_api_key}"
-        
-        # Convert safety settings to proper format
-        # safety_settings_list = [
-            # {
-                # "category": item["category"],
-                # "threshold": item["threshold"]
-            # } for item in self.config.safety_settings
-        # ]
-        
+        url = f"{self.api_url}:{endpoint}?{'alt=sse&' if stream else ''}key={self.config.gemini_api_key}"       
         payload = {
             "contents":
             contents,
@@ -597,8 +588,6 @@ class AIBot:
             result['type'] = 'error'
 
         return result
-
-
 
     def format_reply_context(self, reply_info: dict, current_message: str) -> Union[str, list]:
         """Format the reply context with metadata about the replied message."""

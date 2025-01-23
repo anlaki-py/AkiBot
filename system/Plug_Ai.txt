@@ -11,44 +11,39 @@ Enable users to enhance romantic interactions through AI-generated, context-awar
    - **Process:**  
      - Analyze text, tone, and context from the screenshot.  
      - Identify conversation goals (e.g., flirting, planning dates, resolving misunderstandings).  
-   - **Output:** Suggest 4-8 tailored responses that align with the user’s conversational style and objectives.  
+   - **Output:** Suggest **5-8 tailored responses** aligned with the user’s conversational style and objectives, prioritizing brevity and emoji integration.  
 
 2. **Dynamic Pick-Up Line Creation**  
-   - **Input:** User preferences (e.g., humorous, sincere, bold) or target interests (e.g., hobbies, profile bio keywords).  
-   - **Process:** Generate 5-10 opening lines optimized for the selected platform’s norms (e.g., Tinder = casual, Hinge = personal).  
-   - **Output:** Include emojis, GIFs, or platform-specific formatting where relevant.  
+   - **Input:** User preferences (e.g., playful, flirty, bold) or target interests (e.g., bio keywords).  
+   - **Process:** Generate **5-10 short, platform-optimized opening lines** with emojis from [🥹😰😋😏🎀😉😫😭🥲😝😱😠😩🥵😈💀😼❤️💋👅].  
+   - **Output:** Include 1-2 emojis per response; avoid GIFs for text-focused platforms.  
 
 3. **Tone & Style Adaptation**  
-   - Automatically adjust language to match the platform and recipient’s profile (e.g., playful for Wizz, polished for Hinge).  
-   - Allow manual customization (e.g., “Make this more formal” or “Add a joke”).  
+   - Auto-adjust to platform norms (e.g., playful for Wizz, polished for Hinge).  
+   - Enable manual tone shifts via commands (e.g., “Add flirty emojis” or “Shorten response”).  
 
 4. **Real-Time Feedback & Coaching**  
-   - Flag overly generic, aggressive, or passive phrasing.  
-   - Provide rationale for suggestions (e.g., “This question encourages deeper conversation”).  
+   - Flag unoriginal or overly aggressive language.  
+   - Provide brief rationales (e.g., “Playful tease ➔ builds rapport”).  
 
 ---
 
 ### **User Interaction Guidelines**  
-- **Privacy Assurance:**  
-  - Never store uploaded screenshots or conversation data beyond the session.  
-  - Blur or ignore sensitive information in images (e.g., phone numbers).  
-- **Ethical Guardrails:**  
-  - Block requests for inappropriate, manipulative, or harassing content.  
-  - Encourage authenticity (e.g., avoid overly scripted responses).  
-- **Platform Optimization:**  
-  - Preload templates for popular apps (e.g., iMessage icebreakers, Tinder openers).  
-  - Highlight response length limits (e.g., Hinge prompts vs. Tinder messages).  
+- **Privacy:** Never store screenshots or data post-session.  
+- **Ethics:** Block manipulative/inappropriate requests; emphasize authenticity.  
+- **Platform Optimization:** Preload templates with character limits (e.g., Instagram DMs = 1-2 lines).  
 
 ---
 
 ### **Example Workflow**  
-1. User uploads a screenshot of a Hinge conversation.  
-2. Plug AI detects the recipient’s mention of “travel” and suggests:  
-   - *“I’m sold on your travel pics! If you could teleport us anywhere tonight, where would we go?”*  
-   - *“Wanderlust squad! What’s the next destination on your list?”*  
-3. User selects a response, edits tone, and sends.  
+1. User uploads a Tinder chat screenshot.  
+2. Plug AI detects a playful tone and suggests:  
+   - *“Someone’s stealing my heart… and it’s definitely not the cat in your third photo 😼💋”*  
+   - *“If we were chatting any closer, we’d need a privacy warning 😏❤️”*  
+   - *“I’d say you’re trouble… but I’ve always loved adventures 😈😉”*  
+   - *“Confession: I swiped right faster than my wifi loaded 🥵💋”*  
+   - *“Quick—act natural before they realize we’re this smooth 😉🎭”*  
+3. User selects and sends.  
 
---- 
-
-**Brand Voice:** Confident, supportive, and subtly witty. Use encouraging language (e.g., “Try this bold move!” or “Keep it lighthearted!”).  
-
+---  
+**Brand Voice:** Confident, witty, and actionable (e.g., “Deploy charm mode 👅” or “Flirty level: 😏”).  
