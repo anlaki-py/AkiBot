@@ -1,4 +1,4 @@
-# AkiBot (v1.0.6) - The Ultimate Telegram AI Assistant
+# AkiBot (v1.0.7) - The Ultimate Telegram AI Assistant
 
 This is a Telegram bot powered by the Gemini AI model, designed to interact with users through various media types and provide helpful responses.
 
@@ -13,6 +13,8 @@ The bot is capable of:
 -   **Instagram Media Downloading:** Downloading photos and videos from Instagram links.
 -   **YouTube to MP3 Conversion:** Converting YouTube videos to MP3 audio files.
 -   **Webpage to Markdown Conversion:** Converting webpages to Markdown format.
+-   **YouTube Transcript Extraction**: Extracting transcripts from YouTube videos.
+-   **Enhanced Context Handling**: Uses message replies and context to understand user's intent better.
 
 ## Features
 
@@ -25,7 +27,12 @@ The bot is capable of:
 -   **Error Handling:** Includes robust error handling and retry mechanisms for network issues and API rate limits.
 -   **Configuration:** Utilizes a configuration file for easy customization of bot settings, including allowed users, AI model, and safety settings.
 -   **User Logging:** Logs user data including first and last seen dates, chat type, and more.
--   **Config Editor:** Built-in web based configuration editor to modify the bot settings and system prompts.
+-  **Config Editor:** Built-in web based configuration editor to modify the bot settings and system prompts.
+-  **Markdown Toggle**: Allows users to toggle between plain text and rendered markdown for bot responses.
+-  **Enhanced Reply Context**: The bot can now understand and process replies to previous messages, including images, documents, and audio.
+-  **Improved Media Handling**: Improved handling for audio and voice messages, including metadata and file sizes.
+-  **Token Management**: Manages chat history token count to prevent exceeding API limits by removing the oldest messages.
+-  **Detailed Reasoning**: The `/think` command provides detailed reasoning for the AI bot's responses.
 
 ## Commands
 
@@ -35,7 +42,10 @@ The bot is capable of:
 -   `/insta <url>`: Downloads Instagram media from the provided URL as compressed media.
 -   `/instaFile <url>`: Downloads Instagram media from the provided URL as uncompressed files.
 -   `/ytb2mp3 <url>`: Downloads the audio from a YouTube video as an MP3 file.
--    `/web2md <url>`: Converts a webpage to a markdown file.
+-   `/web2md <url>`: Converts a webpage to a markdown file.
+-   `/think <query>`:  Provides a detailed reasoning for the AI bot's response to the query. 
+> The Think command is a standalone function and not related to the main model or context and the generated responses are not saved in the context history.
+-   `/ytb2transcript <url>`: Extracts the transcript from a YouTube video.
 
 ## Setup
 

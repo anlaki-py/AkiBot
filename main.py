@@ -1,83 +1,4 @@
-# main.py v1.4.50
-"""
-=== MAINTENANCE AND MODIFICATION GUIDE ===
-
-This Telegram bot integrates Gemini AI, media downloaders, and web conversion tools. Follow these guidelines when modifying:
-
-1. CRITICAL COMPONENTS (Avoid structural changes without testing)
-- Configuration System:
-  • Modify config/config.json for settings (not Config class logic)
-  • Add new env variables ONLY through the Config class
-- Security Decorators (@check_user_access and @global_user_access):
-  • Preserve user ID validation logic
-  • Modify allowed_users list in config.json for access control
-  • Use @global_user_access to block a certain feature for everyone
-- API Handlers (Gemini/YouTube/Instagram):
-  • Keep retry logic and error handling intact
-  • Update regex patterns cautiously (INSTAGRAM_URL_REGEX/YOUTUBE_URL_REGEX)
-
-2. SAFE TO MODIFY AREAS
-- Command Handlers:
-  • Add new commands using @check_user_access decorator
-  • Extend help_command() with new features
-- File Processing:
-  • Add supported extensions via allowed_extensions set
-  • Implement new process_file() handlers
-- Chat Features:
-  • Modify format_reply_context() for different reply formatting
-  • Adjust manage_chat_history() token limits
-
-3. MODIFICATION WARNINGS
-- Chat History Structure:
-  • Changing history format will invalidate existing user histories
-  • Test data migration if modifying Chat class
-- Media Processing:
-  • Maintain base64 encoding for Gemini API compatibility
-  • Keep tempfile cleanup procedures
-- Dependency Versions:
-  • Verify library compatibility before upgrading:
-    python-telegram-bot~20.5
-    Pillow~10.2
-    requests~2.31
-
-4. BEST PRACTICES
-- Environment Management:
-  • Keep TELEGRAM_TOKEN_KEY and GEMINI_API_KEY in environment
-  • Never commit .env files
-- Testing:
-  • Validate Instagram/YouTube regex changes with URL samples
-  • Test file uploads with all allowed extensions
-  • Verify history persistence after restarts
-- Error Handling:
-  • Maintain retry_operation() wrapper for network calls
-  • Preserve file cleanup in finally blocks
-
-5. EXTENSION GUIDE
-To add new features:
-- New Commands:
-  1. Create handler with @check_user_access
-  2. Add to help_command() text
-  3. Register in application.add_handler()
-- New Media Types:
-  1. Add to allowed_extensions
-  2. Implement handle_processed_file() logic
-  3. Update get_replied_message_content()
-- API Integrations:
-  1. Use existing generate_content() pattern
-  2. Implement response handling similar to handle_gemini_response()
-  3. Add rate limiting via RETRY_DELAY
-
-6. CRITICAL PATHS
-- Initialization Flow:
-  config_editor() → AIBot() → run()
-- Message Processing:
-  handle_text() → generate_content() → handle_gemini_response()
-- File Pipeline:
-  handle_media() → process_file() → handle_processed_file()
-
-=== END OF GUIDE ===
-"""
-
+# main.py v1.4.6
 import os
 import io
 import json
@@ -97,7 +18,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,  # Added this import
+    CallbackQueryHandler,
     filters,
     ContextTypes,
 )
@@ -109,14 +30,14 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from utils.flask.config_editor import config_editor
-from utils.commands.insta import InstagramDownloader
-from utils.commands.ytb2mp3 import YouTubeDownloader
-from utils.commands.web2md import WebToMarkdownConverter
-from utils.commands.start import start_command
-from utils.commands.help import help_command
-from utils.commands.clear import clear_command
-from utils.commands.think import think_command
-from utils.commands.ytb2transcript import handler as transcript_handler
+from utils.commands.insta.insta import InstagramDownloader
+from utils.commands.ytb2mp3.ytb2mp3 import YouTubeDownloader
+from utils.commands.web2md.web2md import WebToMarkdownConverter
+from utils.commands.start.start import start_command
+from utils.commands.help.help import help_command
+from utils.commands.clear.clear import clear_command
+from utils.commands.think.think import think_command
+from utils.commands.ytb2transcript.ytb2transcript import handler as transcript_handler
 
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
