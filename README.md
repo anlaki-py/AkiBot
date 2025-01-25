@@ -57,13 +57,13 @@ The bot is capable of:
     apt install python3.11
     ```    
     
-1.  **Install Requirements:**
+1.  **Initial Setup:**
     - Create and enter the virtual environment
     ```bash
     python -m venv venv
     source venv/bin/activitie
     ```
-    Install the requirements
+    - Install the requirements
     ```bash
     pip install -r requirements.txt
     ```
@@ -91,4 +91,4 @@ The bot is capable of:
 
 ## License
 
-This project is licensed under my custom [license](LICENSE).
+This project is licensed under the [MIT](LICENSE) license.
