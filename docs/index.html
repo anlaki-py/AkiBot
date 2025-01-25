@@ -3,310 +3,172 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AkiBot - The Ultimate Telegram AI Assistant</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="code-blocks.css">
-  <script src="https://unpkg.com/feather-icons"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prismjs/1.24.1/prism.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prismjs/1.24.1/themes/prism-tomorrow.min.css"/>
+  <title>AkiBot - Telegram AI Assistant</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="prism.css">
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
 </head>
 <body>
 
-  <header class="hero">
-    <nav>
-      <div class="logo">AkiBot</div>
-      <div class="nav-links">
-        <a href="#functionality">Core</a>
-        <a href="#features">Features</a>
-        <a href="#commands">Commands</a>
-        <a href="#setup">Setup</a>
-      </div>
-      <button class="mobile-menu-btn">
-        <i data-feather="menu"></i>
-      </button>
-    </nav>
-
-    <div class="hero-content">
+<nav>
+  <div class="nav-content">
+    <div class="logo">
+      <img src="bot-logo.svg" alt="AkiBot Logo">
       <h1>AkiBot</h1>
-      <p class="subtitle">The Ultimate Telegram AI Assistant</p>
-      <p class="version">Version 1.0.8</p>
-      
-      <div class="hero-buttons">
-        <a href="#setup" class="btn primary">
-          <i data-feather="download"></i>
-          Get Started
-        </a>
-        <a href="https://github.com/yourusername/akibot" class="btn secondary">
-          <i data-feather="github"></i>
-          View on GitHub
-        </a>
+      <span class="version">v1.0.8</span>
+    </div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#commands">Commands</a>
+      <a href="#setup">Setup</a>
+      <a href="https://github.com/anlaki-py/AkiBot/" target="_blank" class="github-link">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5c.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34c-.46-1.16-1.11-1.47-1.11-1.47c-.91-.62.07-.6.07-.6c1 .07 1.53 1.03 1.53 1.03c.87 1.52 2.34 1.07 2.91.83c.09-.65.35-1.09.63-1.34c-2.22-.25-4.55-1.11-4.55-4.92c0-1.11.38-2 1.03-2.71c-.1-.25-.45-1.29.1-2.64c0 0 .84-.27 2.75 1.02c.79-.22 1.65-.33 2.5-.33c.85 0 1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02c.55 1.35.2 2.39.1 2.64c.65.71 1.03 1.6 1.03 2.71c0 3.82-2.34 4.66-4.57 4.91c.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <header>
+    <div class="header-content">
+      <h1>AkiBot</h1>
+      <p>The Ultimate Telegram AI Assistant</p>
+      <div class="header-buttons">
+        <a href="#setup" class="btn primary">Get Started</a>
+        <a href="https://github.com/anlaki-py/AkiBot/" class="btn secondary" target="_blank">View on GitHub</a>
       </div>
     </div>
   </header>
 
-  <!-- Core Functionality Section -->
-  <section id="functionality" class="section">
-    <div class="container">
-      <h2>Core Functionality</h2>
-      <div class="features-grid">
-        <div class="feature-card">
-          <i data-feather="message-square"></i>
-          <h3>Text Interaction</h3>
-          <p>Advanced conversational capabilities with context awareness. Support for markdown formatting and detailed explanations via /think command.</p>
-        </div>
-        
-        <div class="feature-card">
-          <i data-feather="image"></i>
-          <h3>Image Understanding</h3>
-          <p>Process and analyze images for visual queries. Supports multiple image formats and maintains context in image-based conversations.</p>
-        </div>
-
-        <div class="feature-card">
-          <i data-feather="file-text"></i>
-          <h3>Document Analysis</h3>
-          <p>Read and understand text documents, PDFs, and web pages. Convert web content to markdown for easy reading.</p>
-        </div>
-
-        <div class="feature-card">
-          <i data-feather="headphones"></i>
-          <h3>Audio Processing</h3>
-          <p>Handle voice messages and audio files with metadata preservation. Support for various audio formats.</p>
-        </div>
-
-        <div class="feature-card">
-          <i data-feather="instagram"></i>
-          <h3>Instagram Media</h3>
-          <p>Download photos, videos, and reels from Instagram. Options for compressed media or original files.</p>
-        </div>
-
-        <div class="feature-card">
-          <i data-feather="youtube"></i>
-          <h3>YouTube Features</h3>
-          <p>Convert videos to MP3, extract transcripts in multiple languages, and maintain metadata with cover art.</p>
-        </div>
-
-        <div class="feature-card">
-          <i data-feather="globe"></i>
-          <h3>Web Integration</h3>
-          <p>Convert web pages to markdown, extract content, and process online resources seamlessly.</p>
-        </div>
-
-        <div class="feature-card">
-          <i data-feather="layers"></i>
-          <h3>Context Management</h3>
-          <p>Smart token management and history tracking for maintaining conversation context across sessions.</p>
-        </div>
+  <section id="features">
+    <h2>Features</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3>Text Interaction</h3>
+        <p>Engage in conversational text-based chats with context-aware responses</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👁️</div>
+        <h3>Image Understanding</h3>
+        <p>Process and analyze images for vision-based queries</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📄</div>
+        <h3>Document Analysis</h3>
+        <p>Read and understand text-based documents</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎵</div>
+        <h3>Audio Processing</h3>
+        <p>Handle audio messages and files with metadata support</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📸</div>
+        <h3>Instagram Download</h3>
+        <p>Download photos and videos from Instagram links</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎬</div>
+        <h3>YouTube to MP3</h3>
+        <p>Convert YouTube videos to MP3 audio files with metadata</p>
       </div>
     </div>
   </section>
 
-  <!-- Features Section -->
-  <section id="features" class="section alt">
-    <div class="container">
-      <h2>Advanced Features</h2>
-      <div class="feature-list">
-        <div class="feature-item">
-          <i data-feather="shield"></i>
-          <div>
-            <h3>Security & Access Control</h3>
-            <p>Granular user access control with configurable permissions. Secure handling of sensitive data and API keys.</p>
-          </div>
-        </div>
-        
-        <div class="feature-item">
-          <i data-feather="clock"></i>
-          <div>
-            <h3>Smart History Management</h3>
-            <p>Intelligent chat history tracking with automatic token management. Contextual understanding across message types.</p>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <i data-feather="folder"></i>
-          <div>
-            <h3>Advanced File Processing</h3>
-            <p>Support for multiple file formats including images, documents, audio, and video. Automatic format detection and handling.</p>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <i data-feather="settings"></i>
-          <div>
-            <h3>Web-based Configuration</h3>
-            <p>User-friendly configuration editor accessible via web interface. Real-time updates to bot settings and system prompts.</p>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <i data-feather="repeat"></i>
-          <div>
-            <h3>Error Recovery</h3>
-            <p>Robust error handling with automatic retries for network issues and API rate limits. Graceful degradation of services.</p>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <i data-feather="activity"></i>
-          <div>
-            <h3>Advanced Logging</h3>
-            <p>Comprehensive user activity tracking including first/last seen dates, chat types, and interaction patterns.</p>
-          </div>
-        </div>
+  <section id="commands">
+    <h2>Commands</h2>
+    <div class="commands-list">
+      <div class="command-item">
+        <code>/start</code>
+        <p>Starts the bot and provides a welcome message</p>
+      </div>
+      <div class="command-item">
+        <code>/help</code>
+        <p>Displays a list of available commands</p>
+      </div>
+      <div class="command-item">
+        <code>/clear</code>
+        <p>Clears the chat history for the current user</p>
+      </div>
+      <div class="command-item">
+        <code>/insta &lt;url&gt;</code>
+        <p>Downloads Instagram media as compressed media</p>
+      </div>
+      <div class="command-item">
+        <code>/instaFile &lt;url&gt;</code>
+        <p>Downloads Instagram media as uncompressed files</p>
+      </div>
+      <div class="command-item">
+        <code>/ytb2mp3 &lt;url&gt;</code>
+        <p>Downloads YouTube video audio as MP3</p>
+      </div>
+      <div class="command-item">
+        <code>/web2md &lt;url&gt;</code>
+        <p>Converts webpage to markdown</p>
+      </div>
+      <div class="command-item">
+        <code>/ytb2transcript</code>
+        <p>Extracts YouTube video transcript</p>
+      </div>
+      <div class="command-item">
+        <code>/jailbreak</code>
+        <p>Injects jailbreak prompt into current chat</p>
+      </div>
+      <div class="command-item">
+        <code>/think &lt;query&gt;</code>
+        <p>Provides detailed AI reasoning</p>
       </div>
     </div>
   </section>
 
-  <!-- Commands Section -->
-  <section id="commands" class="section">
-    <div class="container">
-      <h2>Available Commands</h2>
-      <div class="commands-grid">
-        <div class="command-card">
-          <code>/start</code>
-          <p>Initialize the bot with a welcome message and setup instructions</p>
-        </div>
-
-        <div class="command-card">
-          <code>/help</code>
-          <p>Display comprehensive list of available commands and their usage</p>
-        </div>
-
-        <div class="command-card">
-          <code>/clear</code>
-          <p>Reset chat history and context for the current user</p>
-        </div>
-
-        <div class="command-card">
-          <code>/insta &lt;url&gt;</code>
-          <p>Download Instagram media as compressed format</p>
-        </div>
-
-        <div class="command-card">
-          <code>/instaFile &lt;url&gt;</code>
-          <p>Download Instagram media as original uncompressed files</p>
-        </div>
-
-        <div class="command-card">
-          <code>/ytb2mp3 &lt;url&gt;</code>
-          <p>Convert YouTube videos to MP3 with metadata and cover art</p>
-        </div>
-
-        <div class="command-card">
-          <code>/web2md &lt;url&gt;</code>
-          <p>Convert webpage content to formatted markdown</p>
-        </div>
-
-        <div class="command-card">
-          <code>/ytb2transcript</code>
-          <p>Extract YouTube video transcripts in multiple languages</p>
-        </div>
-
-        <div class="command-card">
-          <code>/think &lt;query&gt;</code>
-          <p>Get detailed AI reasoning for specific queries</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Setup Section -->
-  <section id="setup" class="section alt">
-    <div class="container">
-      <h2>Installation Guide</h2>
-      
-      <div class="setup-steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>Python Setup</h3>
-            <div class="code-block">
-              <pre><code class="language-bash">apt update
-apt install python3.11</code></pre>
-              <button class="copy-btn" data-target="code1">
-                <i data-feather="copy"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <h3>Virtual Environment</h3>
-            <div class="code-block">
-              <pre><code class="language-bash">python -m venv venv
+  <section id="setup">
+    <h2>Setup</h2>
+    
+    <div class="setup-step">
+      <h3>1. Initial Setup</h3>
+      <pre><code class="language-bash">python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt</code></pre>
-              <button class="copy-btn" data-target="code2">
-                <i data-feather="copy"></i>
-              </button>
-            </div>
-          </div>
-        </div>
+      <button class="copy-btn" data-target="setup-1">Copy</button>
+    </div>
 
-        <div class="step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <h3>Dependencies</h3>
-            <p>Install ffmpeg for audio processing:</p>
-            <div class="code-block">
-              <pre><code class="language-bash">apt install ffmpeg</code></pre>
-              <button class="copy-btn" data-target="code3">
-                <i data-feather="copy"></i>
-              </button>
-            </div>
-          </div>
-        </div>
+    <div class="setup-step">
+      <h3>2. Install Dependencies</h3>
+      <pre><code class="language-bash">apt update
+apt install python3.11 ffmpeg</code></pre>
+      <button class="copy-btn" data-target="setup-2">Copy</button>
+    </div>
 
-        <div class="step">
-          <div class="step-number">4</div>
-          <div class="step-content">
-            <h3>Environment Setup</h3>
-            <p>Configure your environment variables:</p>
-            <div class="code-block">
-              <pre><code class="language-bash">export TELEGRAM_TOKEN_KEY='your-telegram-token'
-export GEMINI_API_KEY='your-gemini-api-key'</code></pre>
-              <button class="copy-btn" data-target="code4">
-                <i data-feather="copy"></i>
-              </button>
-            </div>
-          </div>
-        </div>
+    <div class="setup-step">
+      <h3>3. Environment Variables</h3>
+      <pre><code class="language-bash">export TELEGRAM_TOKEN_KEY="your-telegram-token"
+export GEMINI_API_KEY="your-gemini-api-key"</code></pre>
+      <button class="copy-btn" data-target="setup-3">Copy</button>
+    </div>
 
-        <div class="step">
-          <div class="step-number">5</div>
-          <div class="step-content">
-            <h3>First Run</h3>
-            <div class="code-block">
-              <pre><code class="language-bash">./run.sh</code></pre>
-              <button class="copy-btn" data-target="code5">
-                <i data-feather="copy"></i>
-              </button>
-            </div>
-            <p>Access the configuration editor at <code>http://127.0.0.1:8080</code></p>
-          </div>
-        </div>
-      </div>
+    <div class="setup-step">
+      <h3>4. First Time Run</h3>
+      <pre><code class="language-bash">./run.sh</code></pre>
+      <button class="copy-btn" data-target="setup-4">Copy</button>
+      <p>This will start the bot and configuration editor at <code>http://127.0.0.1:8080</code></p>
+    </div>
+
+    <div class="setup-step">
+      <h3>5. Regular Run</h3>
+      <pre><code class="language-bash">python main.py</code></pre>
+      <button class="copy-btn" data-target="setup-5">Copy</button>
     </div>
   </section>
+</main>
 
-  <footer>
-    <div class="container">
-      <p>AkiBot is licensed under MIT License</p>
-      <div class="social-links">
-        <a href="https://github.com/yourusername/akibot" aria-label="GitHub">
-          <i data-feather="github"></i>
-        </a>
-        <a href="https://t.me/akiaibot" aria-label="Telegram">
-          <i data-feather="send"></i>
-        </a>
-      </div>
-    </div>
-  </footer>
+<footer>
+  <p>Licensed under <a href="LICENSE">MIT License</a></p>
+  <p>Created by <a href="https://github.com/anlaki-py">anlaki-py</a></p>
+</footer>
 
-  <script src="scripts.js"></script>
-  <script>
-    feather.replace();
-  </script>
+<script src="script.js"></script>
 </body>
 </html>
