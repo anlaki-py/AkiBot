@@ -50,7 +50,7 @@ The bot is capable of:
 
 ## Setup
 
-0.  **Recommended**
+0.  **Recommended:**
     - Recommended to use Python version 3.11
     ```bash
     apt update
