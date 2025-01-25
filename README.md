@@ -43,7 +43,7 @@ The bot is capable of:
 -   `/instaFile <url>`: Downloads Instagram media from the provided URL as uncompressed files.
 -   `/ytb2mp3 <url>`: Downloads the audio from a YouTube video as an MP3 file.
 -   `/web2md <url>`: Converts a webpage to a markdown file.
--   `/ytb2transcript <url>`: Extracts the transcript from a YouTube video.
+-   `/ytb2transcript`: Extracts the transcript from a YouTube video by letting user to choose the language and the transcript format (with/without timestamps)
 -   `/jailbreak` Inject jailbreak prompt into the current chat.
 -   `/think <query>`:  Provides a detailed reasoning for the AI bot's response to the query.
     > The Think command is a standalone function and not related to the main model or context and the generated responses are not saved in the context history.
