@@ -55,9 +55,15 @@ The bot is capable of:
     ```bash
     apt update
     apt install python3.11
-    ```
-
+    ```    
+    
 1.  **Install Requirements:**
+    - Create and enter the virtual environment
+    ```bash
+    python -m venv venv
+    source venv/bin/activitie
+    ```
+    Install the requirements
     ```bash
     pip install -r requirements.txt
     ```
