@@ -1,4 +1,4 @@
-# main.py v1.4.6
+# main.py v1.4.7
 import os
 import io
 import json
@@ -12,6 +12,7 @@ import base64
 import requests
 import re
 import telegram
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from telegram import Update, Message, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -29,6 +30,7 @@ import urllib.parse
 import shutil
 from pathlib import Path
 from datetime import datetime
+from utils.tools.akibot_tools import print_akibot_logo as logo, clear_screen
 from utils.flask.config_editor import config_editor
 from utils.commands.insta.insta import InstagramDownloader
 from utils.commands.ytb2mp3.ytb2mp3 import YouTubeDownloader
@@ -38,6 +40,7 @@ from utils.commands.help.help import help_command
 from utils.commands.clear.clear import clear_command
 from utils.commands.think.think import think_command
 from utils.commands.ytb2transcript.ytb2transcript import handler as transcript_handler
+from utils.commands.jailbreak.jailbreak import jailbreak_command, jailbreak_callback_handler
 
 class Config:
     def __init__(self, config_path: str = "config/config.json"):
@@ -200,7 +203,7 @@ class AIBot:
             else:
                 return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Error making request to Gemini API: {str(e)}")
+            print(f"Error making request to Gemini API: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}")
             raise
 
     async def handle_gemini_response(self, response):
@@ -219,7 +222,7 @@ class AIBot:
             return text_response
             
         except Exception as e:
-            print(f"Error handling Gemini response: {str(e)}")
+            print(f"Error handling Gemini response: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}")
             raise
 
     async def retry_operation(self, operation: Callable, *args,
@@ -233,7 +236,7 @@ class AIBot:
                     raise
                 delay = self.RETRY_DELAY * (2**attempt)
                 print(
-                    f"Operation failed with {str(e)}, retrying in {delay} seconds..."
+                    f"Operation failed with {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}, retrying in {delay} seconds..."
                 )
                 await asyncio.sleep(delay)
             except RetryAfter as e:
@@ -330,7 +333,7 @@ class AIBot:
                 await self.retry_operation(process_func, temp_file.name)
                 return await self.handle_processed_file(temp_file.name, message)
         except Exception as e:
-            return f"An error occurred: {str(e)}"
+            return f"An error occurred: {str(e).replace(self.config.gemini_api_key, '[REDACTED TOKEN]')}"
         finally:
             if temp_file and os.path.exists(temp_file.name):
                 os.remove(temp_file.name)
@@ -396,7 +399,7 @@ class AIBot:
             await self.save_chat_history(user_id, username)
             return text_response
         except Exception as e:
-            return f"Error processing file: {str(e)}"
+            return f"Error processing file: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}"
 
 # = Instagram Downloader =============================================================================================================
 
@@ -437,13 +440,13 @@ class AIBot:
         await self.youtube_downloader.handle_youtube_command(
             self, update, context)
 
-# = Web to Markdown =============================================================================================================
+# = Web-page to Markdown =============================================================================================================
 
     @check_user_access
     async def web2md_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler for /web2md command to convert webpages to Markdown."""
         await self.web2md_converter.handle_web2md_command(self, update, context)
-# = Thinking command ============================================================================================================
+# = Thinking Command ============================================================================================================
 
     @check_user_access
     async def think_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -456,7 +459,16 @@ class AIBot:
     async def ytb2transcript_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handler for /ytb2transcript command"""
         await transcript_handler.handle_ytb2transcript_command(self, update, context)
-            
+
+# = Jailbreak Command =============================================================================================================
+
+    @check_user_access
+    async def jailbreak_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await jailbreak_command(self, update, context)
+
+    async def jailbreak_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await jailbreak_callback_handler(self, update, context)
+                    
 # = Basic Commands ============================================================================================================
 
     # @check_user_access
@@ -535,7 +547,7 @@ class AIBot:
             # Add more elif blocks for other message types as required (video, sticker, etc.)
 
         except Exception as e:
-            print(f"Error processing replied message: {str(e)}")
+            print(f"Error processing replied message: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}")
             result['content'] = "[Error processing previous message]"
             result['type'] = 'error'
 
@@ -594,19 +606,36 @@ class AIBot:
             )
        
     async def send_response_with_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                      text: str, reply_to_message_id: int = None) -> None:
+                                         text: str, reply_to_message_id: int = None, 
+                                         reply_markup: InlineKeyboardMarkup = None) -> None:
         try:
             # Initialize message cache if not exists
             if 'message_cache' not in context.chat_data:
                 context.chat_data['message_cache'] = {}
                 
-            # Generate unique callback data
-            callback_data = f"toggle_md_{uuid.uuid4()}"
+            # Determine the correct message and reply method based on update type
+            if update.callback_query:
+                # For callback queries
+                message = update.callback_query.message
+                reply_method = message.edit_text
+                chat_id = message.chat_id
+            else:
+                # For regular messages
+                message = update.message
+                reply_method = message.reply_text
+                chat_id = message.chat_id
             
-            # Create keyboard with toggle button
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("Render Markdown", callback_data=callback_data)
-            ]])
+            # Generate unique callback data if not using a custom reply markup
+            if not reply_markup:
+                callback_data = f"toggle_md_{uuid.uuid4()}"
+                
+                # Create keyboard with toggle button
+                reply_markup = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("Render Markdown", callback_data=callback_data)
+                ]])
+            else:
+                # If a custom reply_markup is provided, use a placeholder callback data
+                callback_data = f"toggle_md_{uuid.uuid4()}"
             
             sent_messages = []
             
@@ -615,24 +644,46 @@ class AIBot:
                 chunks = [text[i:i+4096] for i in range(0, len(text), 4096)]
                 
                 for i, chunk in enumerate(chunks):
-                    chunk_keyboard = None
+                    chunk_markup = None
                     if i == len(chunks) - 1:  # Only add button to last chunk
-                        chunk_keyboard = keyboard
+                        chunk_markup = reply_markup
                     
-                    sent_msg = await self.retry_operation(
-                        update.message.reply_text,
-                        chunk,
-                        reply_to_message_id=reply_to_message_id if i == 0 else None,
-                        reply_markup=chunk_keyboard
-                    )
+                    if update.callback_query:
+                        # For callback queries, edit existing message
+                        sent_msg = await self.retry_operation(
+                            context.bot.edit_message_text,
+                            chat_id=chat_id,
+                            message_id=message.message_id,
+                            text=chunk,
+                            reply_markup=chunk_markup
+                        )
+                    else:
+                        # For regular messages, reply
+                        sent_msg = await self.retry_operation(
+                            reply_method,
+                            chunk,
+                            reply_to_message_id=reply_to_message_id if i == 0 else None,
+                            reply_markup=chunk_markup
+                        )
                     sent_messages.append(sent_msg)
             else:
-                sent_msg = await self.retry_operation(
-                    update.message.reply_text,
-                    text,
-                    reply_to_message_id=reply_to_message_id,
-                    reply_markup=keyboard
-                )
+                if update.callback_query:
+                    # For callback queries, edit existing message
+                    sent_msg = await self.retry_operation(
+                        context.bot.edit_message_text,
+                        chat_id=chat_id,
+                        message_id=message.message_id,
+                        text=text,
+                        reply_markup=reply_markup
+                    )
+                else:
+                    # For regular messages, reply
+                    sent_msg = await self.retry_operation(
+                        reply_method,
+                        text,
+                        reply_to_message_id=reply_to_message_id,
+                        reply_markup=reply_markup
+                    )
                 sent_messages.append(sent_msg)
             
             # Store message data in context
@@ -645,14 +696,17 @@ class AIBot:
             return sent_messages
             
         except Exception as e:
-            error_message = f"Error sending message: {str(e)}"
-            await self.retry_operation(
-                update.message.reply_text,
-                error_message,
-                reply_to_message_id=reply_to_message_id
-            )
+            # Fallback error handling for both message types
+            try:
+                error_message = f"Error sending message: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}"
+                if update.callback_query:
+                    await update.callback_query.message.reply_text(error_message)
+                else:
+                    await update.message.reply_text(error_message)
+            except Exception as fallback_error:
+                print(f"Critical error in send_response_with_toggle: {fallback_error}")
             return None
-
+            
     @check_user_access    
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
@@ -695,7 +749,7 @@ class AIBot:
             await self.send_response_with_toggle(update, context, text_response)
                 
         except Exception as e:
-            error_message = f"An error occurred: {str(e)}"
+            error_message = f"An error occurred: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}"
             await self.send_response_with_toggle(update, context, error_message)
 
     @check_user_access    
@@ -741,7 +795,7 @@ class AIBot:
             await self.send_response_with_toggle(update, context, result)
                 
         except Exception as e:
-            error_message = f"Error handling media: {str(e)}"
+            error_message = f"Error handling media: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}"
             await self.send_response_with_toggle(update, context, error_message)
     
     async def toggle_markdown_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -818,7 +872,7 @@ class AIBot:
                 )
             except:
                 pass
-            print(f"Error in toggle_markdown_callback: {str(e)}")                
+            print(f"Error in toggle_markdown_callback: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}")                
 
     async def count_tokens(self, contents):
         """Count tokens in the content to manage context window."""
@@ -829,7 +883,7 @@ class AIBot:
             response.raise_for_status()
             return response.json().get("totalTokens", 0)
         except Exception as e:
-            print(f"Error counting tokens: {str(e)}")
+            print(f"Error counting tokens: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}")
             return 0
 
     async def manage_chat_history(self, user_id: str, max_tokens: int = 500000):
@@ -864,19 +918,21 @@ class AIBot:
             application.add_handler(CommandHandler("web2md", self.web2md_command))
             application.add_handler(CommandHandler("think", self.think_command))
             application.add_handler(CommandHandler("ytb2transcript", self.ytb2transcript_command))
-            
-            # Add callback query handler for Markdown toggle
             application.add_handler(CallbackQueryHandler(
                 self.toggle_markdown_callback,
                 pattern=r"^toggle_md_"
-            ))
-                             
+            ))                             
+            application.add_handler(CommandHandler("jailbreak", self.jailbreak_command))
+            application.add_handler(CallbackQueryHandler(
+                self.jailbreak_callback_handler, 
+                pattern=r"^jailbreak_"
+            ))                                                                   
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
-            application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL | filters.AUDIO | filters.VOICE, self.handle_media)); print(f"\nBot is running...\n")      
+            application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL | filters.AUDIO | filters.VOICE, self.handle_media)) ; logo() ; print(f"\nBot is running...\n")      
             application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
         except Exception as e:
-            print(f"Critical error: {str(e)}")
+            print(f"Critical error: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}")
             raise
 
 if __name__ == "__main__":

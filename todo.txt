@@ -12,3 +12,7 @@
 
 - Add command /listen 
 - /listen command will ask me to send the video link, then convert it to .mp3 then ask me to type my prompt to send at the end that audio with my prompt to the model to process my request. there's should be a way to cancel the process. chached files should be deleted after success, failure, or cancellation.
+
+# = done [x] =============================================================================================================
+
+- add /jailbreak to load some jailbreak prompts.

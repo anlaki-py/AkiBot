@@ -1,4 +1,4 @@
-# AkiBot (v1.0.7) - The Ultimate Telegram AI Assistant
+# AkiBot (v1.0.8) - The Ultimate Telegram AI Assistant
 
 This is a Telegram bot powered by the Gemini AI model, designed to interact with users through various media types and provide helpful responses.
 
@@ -37,17 +37,25 @@ The bot is capable of:
 ## Commands
 
 -   `/start`: Starts the bot and provides a welcome message.
--   `/help`: Displays a list of available commands and bot capabilities.
+-   `/help`: Displays a list of available commands.
 -   `/clear`: Clears the chat history for the current user.
 -   `/insta <url>`: Downloads Instagram media from the provided URL as compressed media.
 -   `/instaFile <url>`: Downloads Instagram media from the provided URL as uncompressed files.
 -   `/ytb2mp3 <url>`: Downloads the audio from a YouTube video as an MP3 file.
 -   `/web2md <url>`: Converts a webpage to a markdown file.
--   `/think <query>`:  Provides a detailed reasoning for the AI bot's response to the query. 
-    > The Think command is a standalone function and not related to the main model or context and the generated responses are not saved in the context history.
+-   `/think <query>`:  Provides a detailed reasoning for the AI bot's response to the query.
 -   `/ytb2transcript <url>`: Extracts the transcript from a YouTube video.
+-   `/jailbreak` Inject jailbreak prompt into the current chat 
+    > The Think command is a standalone function and not related to the main model or context and the generated responses are not saved in the context history.
 
 ## Setup
+
+0.  **Recommended**
+    - Recommended to use Python version 3.11
+    ```bash
+    apt update
+    apt install python3.11
+    ```
 
 1.  **Install Requirements:**
     ```bash
