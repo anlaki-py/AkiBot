@@ -4,7 +4,7 @@ import logging
 import asyncio
 import aiohttp
 import json
-from typing import Dict, List, AsyncGenerator
+from typing import Dict, List, AsyncGenerator, Optional
 from pydantic import BaseModel, Field
 from telegram import Update
 from telegram.ext import (
@@ -30,10 +30,10 @@ text_models = []
 
 class ImageConfig(BaseModel):
     """Configuration for image generation"""
-    default_model: str = Field(default="flux")
-    default_width: int = Field(default=1024)
-    default_height: int = Field(default=1024)
-    max_size: int = Field(default=2048)
+    default_model: str = Field(default="stable-diffusion")
+    default_width: int = Field(default=512)
+    default_height: int = Field(default=512)
+    max_size: int = Field(default=1024)
     enhance_prompts: bool = Field(default=True)
 
 class TextConfig(BaseModel):
@@ -68,37 +68,59 @@ class PollinationsClient:
         global image_models, text_models
         try:
             async with self.session.get(f"{self.base_image_url}/models") as resp:
-                image_models = await resp.json()
+                if resp.status == 200:
+                    image_models = await resp.json()
             async with self.session.get(f"{self.base_text_url}/models") as resp:
-                text_models = await resp.json()
+                if resp.status == 200:
+                    text_models = await resp.json()
             logger.info("Updated model lists")
         except Exception as e:
             logger.error("Failed to refresh models: %s", e)
-            image_models = ["flux", "stable-diffusion"]
-            text_models = ["gpt-4o-mini", "mistral"]
+            image_models = ["stable-diffusion"]
+            text_models = ["gpt-4o-mini"]
 
     async def generate_image(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
         """Generate image with real-time progress"""
+        if not prompt:
+            yield "❌ Please provide a valid prompt"
+            return
+
         try:
+            # Ensure all parameters are properly typed
             params = {
-                "model": kwargs.get("model", self.image_config.default_model),
-                "width": kwargs.get("width", self.image_config.default_width),
-                "height": kwargs.get("height", self.image_config.default_height),
-                "seed": kwargs.get("seed"),
-                "nologo": str(kwargs.get("nologo", False)).lower(),
-                "enhance": str(kwargs.get("enhance", self.image_config.enhance_prompts)).lower(),
-                "safe": str(kwargs.get("safe", True)).lower()
+                "prompt": prompt,
+                "model": str(kwargs.get("model", self.image_config.default_model)),
+                "width": str(kwargs.get("width", self.image_config.default_width)),
+                "height": str(kwargs.get("height", self.image_config.default_height)),
             }
-
-            encoded_prompt = aiohttp.helpers.quote(prompt)
-            url = f"{self.base_image_url}/prompt/{encoded_prompt}"
             
-            async with self.session.get(url, params=params) as resp:
-                if resp.status == 200:
-                    yield await resp.text()
-                else:
-                    yield f"❌ Image generation failed: {await resp.text()}"
+            # Optional parameters
+            if kwargs.get("seed") is not None:
+                params["seed"] = str(kwargs["seed"])
+            if kwargs.get("nologo") is not None:
+                params["nologo"] = str(kwargs["nologo"]).lower()
+            if kwargs.get("enhance") is not None:
+                params["enhance"] = str(kwargs["enhance"]).lower()
+            if kwargs.get("safe") is not None:
+                params["safe"] = str(kwargs["safe"]).lower()
 
+            # Build URL with proper encoding
+            url = f"{self.base_image_url}/generate"
+            
+            async with self.session.post(url, json=params) as resp:
+                if resp.status == 200:
+                    result = await resp.json()
+                    if "url" in result:
+                        yield result["url"]
+                    else:
+                        yield "❌ No image URL in response"
+                else:
+                    error_text = await resp.text()
+                    yield f"❌ Image generation failed: {error_text}"
+
+        except aiohttp.ClientError as e:
+            logger.error("Network error during image generation: %s", e)
+            yield "⚠️ Network error. Please try again later."
         except Exception as e:
             logger.error("Image generation error: %s", e)
             yield "⚠️ Image service unavailable. Please try again later."
@@ -116,6 +138,10 @@ class PollinationsClient:
             }
 
             async with self.session.post(url, json=payload) as resp:
+                if resp.status != 200:
+                    yield f"❌ Chat service error: {await resp.text()}"
+                    return
+
                 async for line in resp.content:
                     if line.startswith(b'data: '):
                         try:
@@ -144,6 +170,8 @@ class PollinationsClient:
             }
 
             async with self.session.post(f"{self.base_text_url}/openai", json=payload) as resp:
+                if resp.status != 200:
+                    return f"❌ Vision service error: {await resp.text()}"
                 response = await resp.json()
                 return response["choices"][0]["message"]["content"]
         except Exception as e:
@@ -241,6 +269,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text(response)
             return
 
+        if not message.text:
+            await message.reply_text("❌ Please send a text message or image")
+            return
+
         history = conversation_history.setdefault(user_id, [])
         history.append({"role": "user", "content": message.text})
         
@@ -263,7 +295,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def setup_client(app: Application):
     """Initialize client when application starts"""
     await client.aenter()
-    app.job_queue.run_repeating(client.refresh_models, interval=3600)
+    app.job_queue.run_repeating(lambda _: client.refresh_models(), interval=3600)
 
 async def shutdown_client(app: Application):
     """Cleanup client when application stops"""
@@ -272,9 +304,11 @@ async def shutdown_client(app: Application):
 def main():
     """Main application setup with proper async management"""
     try:
-        bot_token = os.environ["TELEGRAM_TOKEN_KEY"]
-    except KeyError:
-        logger.critical("Missing TELEGRAM_TOKEN environment variable")
+        bot_token = os.environ.get("TELEGRAM_TOKEN_KEY")
+        if not bot_token:
+            raise ValueError("Missing TELEGRAM_TOKEN_KEY environment variable")
+    except Exception as e:
+        logger.critical("Bot token error: %s", e)
         return
 
     # Create application with lifecycle handlers
