@@ -1,4 +1,7 @@
 python-telegram-bot
+python-telegram-bot[ext] 
+openai
+pydantic
 requests
 Pillow
 pytz
