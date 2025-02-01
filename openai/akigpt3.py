@@ -6,7 +6,7 @@ import aiohttp
 import json
 from typing import Dict, List, AsyncGenerator
 from pydantic import BaseModel, Field
-from telegram import Update, InputFile, InputMediaPhoto
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -43,15 +43,26 @@ class TextConfig(BaseModel):
     temperature: float = Field(default=0.7)
 
 class PollinationsClient:
-    """Unified client with proper async handling"""
+    """Unified client with proper async session management"""
     
     def __init__(self):
         self.image_config = ImageConfig()
         self.text_config = TextConfig()
         self.base_image_url = "https://image.pollinations.ai"
         self.base_text_url = "https://text.pollinations.ai"
+        self.session = None
+
+    async def aenter(self):
+        """Initialize async resources"""
         self.session = aiohttp.ClientSession()
-        
+        await self.refresh_models()
+        return self
+
+    async def aclose(self):
+        """Cleanup async resources"""
+        if self.session:
+            await self.session.close()
+
     async def refresh_models(self):
         """Refresh available models from API"""
         global image_models, text_models
@@ -71,15 +82,14 @@ class PollinationsClient:
         try:
             params = {
                 "model": kwargs.get("model", self.image_config.default_model),
-                "width": min(kwargs.get("width", self.image_config.default_width), self.image_config.max_size),
-                "height": min(kwargs.get("height", self.image_config.default_height), self.image_config.max_size),
+                "width": kwargs.get("width", self.image_config.default_width),
+                "height": kwargs.get("height", self.image_config.default_height),
                 "seed": kwargs.get("seed"),
                 "nologo": str(kwargs.get("nologo", False)).lower(),
                 "enhance": str(kwargs.get("enhance", self.image_config.enhance_prompts)).lower(),
                 "safe": str(kwargs.get("safe", True)).lower()
             }
 
-            # URL-encode prompt
             encoded_prompt = aiohttp.helpers.quote(prompt)
             url = f"{self.base_image_url}/prompt/{encoded_prompt}"
             
@@ -94,7 +104,7 @@ class PollinationsClient:
             yield "⚠️ Image service unavailable. Please try again later."
 
     async def chat_completion(self, messages: List[dict], **kwargs) -> AsyncGenerator[str, None]:
-        """Proper async chat completion with error handling"""
+        """Async chat completion with proper error handling"""
         try:
             url = f"{self.base_text_url}/openai"
             payload = {
@@ -199,10 +209,8 @@ async def imagine_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Please provide a prompt after /imagine")
             return
 
-        # Show generating status
         status_msg = await update.message.reply_text("🎨 Generating your image...")
 
-        # Generate image
         async for result in client.generate_image(prompt):
             if result.startswith("http"):
                 await context.bot.send_photo(
@@ -224,7 +232,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
 
     try:
-        # Handle image analysis
         if message.photo:
             image_file = await message.photo[-1].get_file()
             response = await client.analyze_image(
@@ -234,11 +241,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text(response)
             return
 
-        # Handle text messages
         history = conversation_history.setdefault(user_id, [])
         history.append({"role": "user", "content": message.text})
         
-        # Stream response
         bot_msg = await message.reply_text("💭 Thinking...")
         full_response = ""
         
@@ -247,7 +252,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await bot_msg.edit_text(full_response)
             except:
-                pass  # Ignore edit conflicts
+                pass
         
         history.append({"role": "assistant", "content": full_response})
 
@@ -255,16 +260,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error("Message handling error: %s", e)
         await message.reply_text("⚠️ Error processing request")
 
+async def setup_client(app: Application):
+    """Initialize client when application starts"""
+    await client.aenter()
+    app.job_queue.run_repeating(client.refresh_models, interval=3600)
+
+async def shutdown_client(app: Application):
+    """Cleanup client when application stops"""
+    await client.aclose()
+
 def main():
-    """Main application setup with proper cleanup"""
+    """Main application setup with proper async management"""
     try:
-        bot_token = os.environ["TELEGRAM_TOKEN"]
+        bot_token = os.environ["TELEGRAM_TOKEN_KEY"]
     except KeyError:
         logger.critical("Missing TELEGRAM_TOKEN environment variable")
         return
 
-    # Create application
-    app = Application.builder().token(bot_token).build()
+    # Create application with lifecycle handlers
+    app = Application.builder().token(bot_token).post_init(setup_client).post_shutdown(shutdown_client).build()
     
     # Register handlers
     app.add_handler(CommandHandler("start", start))
@@ -273,12 +287,10 @@ def main():
     app.add_handler(CommandHandler("models", list_models))
     app.add_handler(CommandHandler("imagine", imagine_command))
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
-    
-    # Schedule model refresh
-    app.job_queue.run_repeating(lambda ctx: client.refresh_models(), interval=3600, first=10)
 
-    logger.info("Starting fixed AI chatbot...")
+    logger.info("Starting AI chatbot with proper async management...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+    
