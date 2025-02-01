@@ -4,7 +4,7 @@ import logging
 import asyncio
 import aiohttp
 import json
-from typing import Dict, List, AsyncGenerator, Optional
+from typing import Dict, List, AsyncGenerator
 from pydantic import BaseModel, Field
 from telegram import Update
 from telegram.ext import (
@@ -30,10 +30,10 @@ text_models = []
 
 class ImageConfig(BaseModel):
     """Configuration for image generation"""
-    default_model: str = Field(default="stable-diffusion")
-    default_width: int = Field(default=512)
-    default_height: int = Field(default=512)
-    max_size: int = Field(default=1024)
+    default_model: str = Field(default="flux")
+    default_width: int = Field(default=1024)
+    default_height: int = Field(default=1024)
+    max_size: int = Field(default=2048)
     enhance_prompts: bool = Field(default=True)
 
 class TextConfig(BaseModel):
@@ -43,7 +43,7 @@ class TextConfig(BaseModel):
     temperature: float = Field(default=0.7)
 
 class PollinationsClient:
-    """Unified client with proper async session management"""
+    """Complete client with fixed image and text generation"""
     
     def __init__(self):
         self.image_config = ImageConfig()
@@ -68,61 +68,60 @@ class PollinationsClient:
         global image_models, text_models
         try:
             async with self.session.get(f"{self.base_image_url}/models") as resp:
-                if resp.status == 200:
-                    image_models = await resp.json()
+                image_models = await resp.json()
             async with self.session.get(f"{self.base_text_url}/models") as resp:
-                if resp.status == 200:
-                    text_models = await resp.json()
+                text_models = await resp.json()
             logger.info("Updated model lists")
         except Exception as e:
             logger.error("Failed to refresh models: %s", e)
-            image_models = ["stable-diffusion"]
-            text_models = ["gpt-4o-mini"]
+            image_models = ["flux", "stable-diffusion"]
+            text_models = ["gpt-4o-mini", "mistral"]
 
     async def generate_image(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
-        """Generate image with real-time progress"""
-        if not prompt:
-            yield "❌ Please provide a valid prompt"
-            return
-
+        """Fixed image generation with proper parameter handling"""
         try:
-            # Ensure all parameters are properly typed
+            # Build parameters with default values and validation
             params = {
-                "prompt": prompt,
-                "model": str(kwargs.get("model", self.image_config.default_model)),
-                "width": str(kwargs.get("width", self.image_config.default_width)),
-                "height": str(kwargs.get("height", self.image_config.default_height)),
+                "model": kwargs.get("model", self.image_config.default_model),
+                "width": str(min(
+                    kwargs.get("width", self.image_config.default_width),
+                    self.image_config.max_size
+                )),
+                "height": str(min(
+                    kwargs.get("height", self.image_config.default_height),
+                    self.image_config.max_size
+                )),
+                "seed": str(kwargs.get("seed", "")),
+                "nologo": str(kwargs.get("nologo", False)).lower(),
+                "enhance": str(kwargs.get("enhance", self.image_config.enhance_prompts)).lower(),
+                "safe": str(kwargs.get("safe", True)).lower()
             }
-            
-            # Optional parameters
-            if kwargs.get("seed") is not None:
-                params["seed"] = str(kwargs["seed"])
-            if kwargs.get("nologo") is not None:
-                params["nologo"] = str(kwargs["nologo"]).lower()
-            if kwargs.get("enhance") is not None:
-                params["enhance"] = str(kwargs["enhance"]).lower()
-            if kwargs.get("safe") is not None:
-                params["safe"] = str(kwargs["safe"]).lower()
 
-            # Build URL with proper encoding
-            url = f"{self.base_image_url}/generate"
+            # Remove empty parameters
+            params = {k: v for k, v in params.items() if v and v not in ['none', '']}
+
+            # URL-encode prompt and build URL
+            encoded_prompt = aiohttp.helpers.quote(prompt)
+            url = f"{self.base_image_url}/prompt/{encoded_prompt}"
             
-            async with self.session.post(url, json=params) as resp:
+            logger.debug("Image generation URL: %s", url)
+            logger.debug("Image generation params: %s", params)
+
+            async with self.session.get(url, params=params) as resp:
                 if resp.status == 200:
-                    result = await resp.json()
-                    if "url" in result:
-                        yield result["url"]
+                    content_type = resp.headers.get('Content-Type', '')
+                    if 'image/' in content_type:
+                        image_data = await resp.read()
+                        yield image_data
                     else:
-                        yield "❌ No image URL in response"
+                        text_response = await resp.text()
+                        yield f"❌ Unexpected response: {text_response}"
                 else:
                     error_text = await resp.text()
-                    yield f"❌ Image generation failed: {error_text}"
+                    yield f"❌ Image generation failed ({resp.status}): {error_text}"
 
-        except aiohttp.ClientError as e:
-            logger.error("Network error during image generation: %s", e)
-            yield "⚠️ Network error. Please try again later."
         except Exception as e:
-            logger.error("Image generation error: %s", e)
+            logger.error("Image generation error: %s", e, exc_info=True)
             yield "⚠️ Image service unavailable. Please try again later."
 
     async def chat_completion(self, messages: List[dict], **kwargs) -> AsyncGenerator[str, None]:
@@ -138,10 +137,6 @@ class PollinationsClient:
             }
 
             async with self.session.post(url, json=payload) as resp:
-                if resp.status != 200:
-                    yield f"❌ Chat service error: {await resp.text()}"
-                    return
-
                 async for line in resp.content:
                     if line.startswith(b'data: '):
                         try:
@@ -170,8 +165,6 @@ class PollinationsClient:
             }
 
             async with self.session.post(f"{self.base_text_url}/openai", json=payload) as resp:
-                if resp.status != 200:
-                    return f"❌ Vision service error: {await resp.text()}"
                 response = await resp.json()
                 return response["choices"][0]["message"]["content"]
         except Exception as e:
@@ -230,7 +223,7 @@ async def list_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Models not loaded yet. Try again in a moment.")
 
 async def imagine_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle image generation"""
+    """Fixed image command handler with proper media handling"""
     try:
         prompt = ' '.join(context.args)
         if not prompt:
@@ -238,20 +231,27 @@ async def imagine_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         status_msg = await update.message.reply_text("🎨 Generating your image...")
+        has_sent_image = False
 
         async for result in client.generate_image(prompt):
-            if result.startswith("http"):
+            if isinstance(result, bytes):
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id,
                     photo=result,
                     reply_to_message_id=update.message.message_id
                 )
+                has_sent_image = True
                 await status_msg.delete()
-            else:
+            elif isinstance(result, str):
                 await status_msg.edit_text(result)
+                if "❌" in result:
+                    return
+
+        if not has_sent_image:
+            await status_msg.edit_text("⚠️ Failed to generate image - no data received")
 
     except Exception as e:
-        logger.error("Image command error: %s", e)
+        logger.error("Image command error: %s", e, exc_info=True)
         await update.message.reply_text("⚠️ Failed to generate image")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -267,10 +267,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message.caption or "Describe this image"
             )
             await message.reply_text(response)
-            return
-
-        if not message.text:
-            await message.reply_text("❌ Please send a text message or image")
             return
 
         history = conversation_history.setdefault(user_id, [])
@@ -295,7 +291,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def setup_client(app: Application):
     """Initialize client when application starts"""
     await client.aenter()
-    app.job_queue.run_repeating(lambda _: client.refresh_models(), interval=3600)
+    app.job_queue.run_repeating(client.refresh_models, interval=3600)
 
 async def shutdown_client(app: Application):
     """Cleanup client when application stops"""
@@ -304,11 +300,9 @@ async def shutdown_client(app: Application):
 def main():
     """Main application setup with proper async management"""
     try:
-        bot_token = os.environ.get("TELEGRAM_TOKEN_KEY")
-        if not bot_token:
-            raise ValueError("Missing TELEGRAM_TOKEN_KEY environment variable")
-    except Exception as e:
-        logger.critical("Bot token error: %s", e)
+        bot_token = os.environ["TELEGRAM_TOKEN_KEY"]
+    except KeyError:
+        logger.critical("Missing TELEGRAM_TOKEN environment variable")
         return
 
     # Create application with lifecycle handlers
@@ -327,4 +321,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
