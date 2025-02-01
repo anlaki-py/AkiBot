@@ -30,7 +30,7 @@ text_models = []
 
 class ImageConfig(BaseModel):
     """Configuration for image generation"""
-    default_model: str = Field(default="flux")
+    default_model: str = Field(default="stable-diffusion")
     default_width: int = Field(default=1024)
     default_height: int = Field(default=1024)
     max_size: int = Field(default=2048)
@@ -43,7 +43,7 @@ class TextConfig(BaseModel):
     temperature: float = Field(default=0.7)
 
 class PollinationsClient:
-    """Complete client with fixed image and text generation"""
+    """Improved client with working image generation and model handling"""
     
     def __init__(self):
         self.image_config = ImageConfig()
@@ -64,68 +64,82 @@ class PollinationsClient:
             await self.session.close()
 
     async def refresh_models(self):
-        """Refresh available models from API"""
+        """Refresh available models with proper parsing"""
         global image_models, text_models
         try:
             async with self.session.get(f"{self.base_image_url}/models") as resp:
-                image_models = await resp.json()
+                image_data = await resp.json()
+                image_models = [m["id"] for m in image_data if "id" in m]
+            
             async with self.session.get(f"{self.base_text_url}/models") as resp:
-                text_models = await resp.json()
+                text_data = await resp.json()
+                text_models = [m["id"] for m in text_data if "id" in m]
+            
             logger.info("Updated model lists")
+            logger.debug("Image models: %s", image_models)
+            logger.debug("Text models: %s", text_models)
+
         except Exception as e:
             logger.error("Failed to refresh models: %s", e)
-            image_models = ["flux", "stable-diffusion"]
+            image_models = ["stable-diffusion", "kandinsky"]
             text_models = ["gpt-4o-mini", "mistral"]
 
     async def generate_image(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
-        """Fixed image generation with proper parameter handling"""
+        """Robust image generation with model fallback"""
         try:
-            # Build parameters with default values and validation
-            params = {
-                "model": kwargs.get("model", self.image_config.default_model),
-                "width": str(min(
-                    kwargs.get("width", self.image_config.default_width),
-                    self.image_config.max_size
-                )),
-                "height": str(min(
-                    kwargs.get("height", self.image_config.default_height),
-                    self.image_config.max_size
-                )),
-                "seed": str(kwargs.get("seed", "")),
-                "nologo": str(kwargs.get("nologo", False)).lower(),
-                "enhance": str(kwargs.get("enhance", self.image_config.enhance_prompts)).lower(),
-                "safe": str(kwargs.get("safe", True)).lower()
-            }
-
-            # Remove empty parameters
-            params = {k: v for k, v in params.items() if v and v not in ['none', '']}
-
-            # URL-encode prompt and build URL
-            encoded_prompt = aiohttp.helpers.quote(prompt)
-            url = f"{self.base_image_url}/prompt/{encoded_prompt}"
-            
-            logger.debug("Image generation URL: %s", url)
-            logger.debug("Image generation params: %s", params)
-
-            async with self.session.get(url, params=params) as resp:
-                if resp.status == 200:
-                    content_type = resp.headers.get('Content-Type', '')
-                    if 'image/' in content_type:
-                        image_data = await resp.read()
-                        yield image_data
-                    else:
-                        text_response = await resp.text()
-                        yield f"❌ Unexpected response: {text_response}"
-                else:
-                    error_text = await resp.text()
-                    yield f"❌ Image generation failed ({resp.status}): {error_text}"
-
+            # Try with default model first
+            yield await self._generate_image_with_model(
+                prompt,
+                self.image_config.default_model,
+                **kwargs
+            )
         except Exception as e:
-            logger.error("Image generation error: %s", e, exc_info=True)
-            yield "⚠️ Image service unavailable. Please try again later."
+            logger.warning("Failed with default model, trying alternatives: %s", e)
+            for model in image_models:
+                if model != self.image_config.default_model:
+                    try:
+                        yield await self._generate_image_with_model(prompt, model, **kwargs)
+                        break
+                    except Exception as fallback_error:
+                        logger.warning("Failed with model %s: %s", model, fallback_error)
+            else:
+                yield "⚠️ All image generation services are currently unavailable"
+
+    async def _generate_image_with_model(self, prompt: str, model: str, **kwargs) -> bytes:
+        """Internal image generation with specific model"""
+        params = {
+            "model": model,
+            "width": str(min(
+                kwargs.get("width", self.image_config.default_width),
+                self.image_config.max_size
+            )),
+            "height": str(min(
+                kwargs.get("height", self.image_config.default_height),
+                self.image_config.max_size
+            )),
+            "seed": str(kwargs.get("seed", "")),
+            "nologo": str(kwargs.get("nologo", False)).lower(),
+            "enhance": str(kwargs.get("enhance", self.image_config.enhance_prompts)).lower(),
+            "safe": str(kwargs.get("safe", True)).lower()
+        }
+
+        # Remove empty parameters
+        params = {k: v for k, v in params.items() if v and v not in ['none', '']}
+
+        encoded_prompt = aiohttp.helpers.quote(prompt)
+        url = f"{self.base_image_url}/prompt/{encoded_prompt}"
+        
+        logger.info("Generating image with model: %s", model)
+        async with self.session.get(url, params=params) as resp:
+            if resp.status == 200:
+                content_type = resp.headers.get('Content-Type', '')
+                if 'image/' in content_type:
+                    return await resp.read()
+                raise Exception(f"Unexpected content type: {content_type}")
+            raise Exception(f"API Error {resp.status}: {await resp.text()}")
 
     async def chat_completion(self, messages: List[dict], **kwargs) -> AsyncGenerator[str, None]:
-        """Async chat completion with proper error handling"""
+        """Reliable chat completion implementation"""
         try:
             url = f"{self.base_text_url}/openai"
             payload = {
@@ -149,27 +163,6 @@ class PollinationsClient:
         except Exception as e:
             logger.error("Chat error: %s", e)
             yield "⚠️ Chat service unavailable. Please try again later."
-
-    async def analyze_image(self, image_url: str, question: str) -> str:
-        """Analyze images using vision capabilities"""
-        try:
-            payload = {
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": question},
-                        {"type": "image_url", "image_url": {"url": image_url}}
-                    ]
-                }],
-                "model": "gpt-4o-mini"
-            }
-
-            async with self.session.post(f"{self.base_text_url}/openai", json=payload) as resp:
-                response = await resp.json()
-                return response["choices"][0]["message"]["content"]
-        except Exception as e:
-            logger.error("Vision error: %s", e)
-            return "⚠️ Failed to analyze image"
 
 # Initialize client
 client = PollinationsClient()
@@ -223,7 +216,7 @@ async def list_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Models not loaded yet. Try again in a moment.")
 
 async def imagine_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fixed image command handler with proper media handling"""
+    """Robust image command handler with multiple fallbacks"""
     try:
         prompt = ' '.join(context.args)
         if not prompt:
@@ -231,7 +224,7 @@ async def imagine_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         status_msg = await update.message.reply_text("🎨 Generating your image...")
-        has_sent_image = False
+        attempts = 0
 
         async for result in client.generate_image(prompt):
             if isinstance(result, bytes):
@@ -240,18 +233,17 @@ async def imagine_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     photo=result,
                     reply_to_message_id=update.message.message_id
                 )
-                has_sent_image = True
                 await status_msg.delete()
+                return
             elif isinstance(result, str):
                 await status_msg.edit_text(result)
-                if "❌" in result:
+                if "unavailable" in result:
                     return
 
-        if not has_sent_image:
-            await status_msg.edit_text("⚠️ Failed to generate image - no data received")
+        await status_msg.edit_text("⚠️ Failed to generate image after multiple attempts")
 
     except Exception as e:
-        logger.error("Image command error: %s", e, exc_info=True)
+        logger.error("Image command error: %s", e)
         await update.message.reply_text("⚠️ Failed to generate image")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -316,7 +308,7 @@ def main():
     app.add_handler(CommandHandler("imagine", imagine_command))
     app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, handle_message))
 
-    logger.info("Starting AI chatbot with proper async management...")
+    logger.info("Starting improved AI chatbot...")
     app.run_polling()
 
 if __name__ == "__main__":
