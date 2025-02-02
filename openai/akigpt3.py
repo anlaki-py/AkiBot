@@ -15,6 +15,7 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+
 from openai import OpenAI
 
 # Configure logging with more detailed format
