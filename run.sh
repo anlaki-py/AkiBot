@@ -169,12 +169,12 @@ create_config() {
     "allowed_users": [
         ${allowed_users}
     ],
-    "gemini_model": "gemini-2.0-flash-exp",
+    "gemini_model": "gemini-2.0-flash",
     "generation_config": {
         "temperature": 0.7,
         "top_p": 0.9,
         "top_k": 40,
-        "max_output_tokens": 1024,
+        "max_output_tokens": 8024,
         "response_mime_type": "text/plain"
     },
     "safety_settings": {
