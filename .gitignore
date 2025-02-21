@@ -13,3 +13,4 @@ config/
 pull.sh
 commit.sh
 save.sh
+todo.txt
