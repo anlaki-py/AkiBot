@@ -886,7 +886,7 @@ class AIBot:
             print(f"Error counting tokens: {str(e).replace(self.config.gemini_api_key, '[REDACTED]')}")
             return 0
 
-    async def manage_chat_history(self, user_id: str, max_tokens: int = 500000):
+    async def manage_chat_history(self, user_id: str, max_tokens: int = 1000000):
         """Manage chat history to prevent token limit issues."""
         if user_id in self.chat_history:
             history = self.chat_history[user_id].history
