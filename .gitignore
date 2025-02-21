@@ -3,7 +3,7 @@ other/
 */venv/
 data/
 groq/
-
+openai/
 __pycache__/
 */__pycache__/
 *.pyc
