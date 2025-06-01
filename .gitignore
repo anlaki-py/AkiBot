@@ -1,4 +1,8 @@
 venv/
+*/venv/
+.venv/
+*/.venv/
+
 other/
 */venv/
 data/
